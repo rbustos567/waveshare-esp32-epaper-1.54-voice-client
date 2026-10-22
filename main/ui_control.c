@@ -4,6 +4,32 @@ static const char *TAG = "UI_CONTROL";
 
 static ui_state_t current_ui_state = UI_STATE_SPLASH;
 static QueueHandle_t xButtonQueue = NULL;
+static volatile bool g_cancel_voice_session = false;
+static volatile bool g_is_waiting_response = false;
+
+bool get_cancel_voice_session(void) {
+    return g_cancel_voice_session; 
+}
+
+esp_err_t set_cancel_voice_session(bool state) {
+    esp_err_t ret = ESP_OK;
+    
+    g_cancel_voice_session = state;
+
+    return ret;
+}
+
+bool get_is_waiting_response(void) {
+    return g_is_waiting_response;
+}
+
+esp_err_t set_is_waiting_response(bool state) {
+    esp_err_t ret = ESP_OK;
+
+    g_is_waiting_response = state;
+
+    return ret;
+}
 
 void vButtonTask(void *pvParameters) {
 
@@ -160,16 +186,27 @@ void vMenuTask(void *pvParameters) {
                 }
 	    // Voice command Workflow
 	    } else if (current_ui_state == UI_STATE_VOICE_RECORDING) {
-                if (evt == EVENT_SINGLE_CLICK) {
-                    ESP_LOGI(TAG, "Regresando a Menu principal...");
-		    Menu *current_menu = get_current_menu();
-                    current_menu->selected_index = 0; // Reset index when exit
-                    set_current_ui_state(UI_STATE_MENU);
-	            render_full(NULL, NULL); 
-                } else if (evt == EVENT_DOUBLE_CLICK) {
-                    //render_partial_with_text("Recording...", NULL);
-		    action_record_and_send_audio(); 
-	        }	
+		
+		if (!get_is_waiting_response()) {
+
+                    if (evt == EVENT_SINGLE_CLICK) {
+		        ESP_LOGI(TAG, "Cancelación detectada. Volviendo al menú principal...");
+
+	                action_cancel_voice_session();
+		        //vTaskDelay(pdMS_TO_TICKS(300));
+                        ESP_LOGI(TAG, "Regresando a Menu principal...");
+		        Menu *current_menu = get_current_menu();
+                        current_menu->selected_index = 0; // Reset index when exit
+                        set_current_ui_state(UI_STATE_MENU);
+	            
+		        render_full(NULL, NULL); 
+                    } else if (evt == EVENT_DOUBLE_CLICK) {
+                        //render_partial_with_text("Recording...", NULL);
+		        action_record_and_send_audio(); 
+	            }
+	        } else {
+	            ESP_LOGI(TAG, "Esperando respuesta del server, ignorando click...");
+	        }	    
             }
         }
     }

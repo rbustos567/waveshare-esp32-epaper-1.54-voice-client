@@ -43,6 +43,10 @@ typedef enum {
 esp_err_t ui_control_init(void);
 ui_state_t get_current_ui_state(void);
 esp_err_t set_current_ui_state(ui_state_t);
+bool get_cancel_voice_session(void);
+esp_err_t set_cancel_voice_session(bool state);
+bool get_is_waiting_response(void);
+esp_err_t set_is_waiting_response(bool state);
 
 #ifdef __cplusplus
 }

@@ -6,9 +6,20 @@ void action_demo(void) {
 
 }
 
+void action_cancel_voice_session(void) {
+    
+    set_cancel_voice_session(true);
+
+    if (audio_manager_is_recording()) {
+        // Forzamos detener la grabación física si estaba activa
+        audio_manager_toggle_recording();
+    }
+}
+
 static void voice_session_task(void *pvParameters) {
     ESP_LOGI(TAG, "Iniciando sesión de voz...");
 
+    set_cancel_voice_session(false);
     // 1. ESTADO: Grabando audio
     // Actualizamos la pantalla visualmente
     render_partial_with_text("Recording...", "Speak your command...");
@@ -17,13 +28,29 @@ static void voice_session_task(void *pvParameters) {
     audio_manager_toggle_recording();
 
     // Esperar mientras el usuario graba (hasta el segundo doble clic)
-    while (audio_manager_is_recording()) {
+    while (audio_manager_is_recording() && !get_cancel_voice_session()) {
         vTaskDelay(pdMS_TO_TICKS(50));
+    }
+
+    // SI EL USUARIO CANCELÓ CON UN CLIC:
+    if (get_cancel_voice_session()) {
+        ESP_LOGI(TAG, "Sesión de voz cancelada por el usuario. Descartando audio.");
+
+	// Asegurarnos de detener la grabación para que record_task salga de su bucle y muera sola
+        if (audio_manager_is_recording()) {
+            audio_manager_toggle_recording();
+        }
+
+        vTaskDelete(NULL);
+        return;
     }
 
     // 2. ESTADO: Enviando HTTP request
     if (audio_manager_get_recorded_bytes() > 0) {
-        
+       
+	// ACTIVAR CANDADO TOTAL: Nadie puede interrumpir la comunicación HTTP
+	set_is_waiting_response(true);
+
 	ESP_LOGI(TAG, "Enviando audio por HTTP...");
 
         render_partial_with_text("Sending to server...", "Uploading audio to server...");
@@ -41,6 +68,9 @@ static void voice_session_task(void *pvParameters) {
             render_partial_with_text("Ready to record", "Done.");
         }
 
+	// LIBERAR CANDADO TOTAL: El ciclo ha terminado con éxito
+	set_is_waiting_response(false);
+
 	//const char *cmd_res = api_client_get_last_cmd_output();
         //if (cmd_res && strlen(cmd_res) > 0) {
 	//    render_partial_with_text("Ready to record", cmd_res);
@@ -50,6 +80,7 @@ static void voice_session_task(void *pvParameters) {
         //}
     } else {
         ESP_LOGW(TAG, "No se grabó audio.");
+	set_is_waiting_response(false);
     }
 
     // 3. Finalizar y regresar al menú principal
@@ -61,7 +92,7 @@ static void voice_session_task(void *pvParameters) {
 }
 
 void action_record_and_send_audio(void) {
-    if (!audio_manager_is_recording()) {
+    if (!audio_manager_is_recording() && !get_is_waiting_response()) {
         // Cambiamos el estado de la UI para bloquear interacciones del menú
         set_current_ui_state(UI_STATE_VOICE_RECORDING);
         
@@ -75,7 +106,7 @@ void action_record_and_send_audio(void) {
             NULL,
             1
         );
-    } else {
+    } else if (audio_manager_is_recording()) {
         // Segundo doble clic: detiene la grabación en curso
         audio_manager_toggle_recording();
     }
