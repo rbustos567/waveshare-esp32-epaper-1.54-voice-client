@@ -95,6 +95,16 @@ The device uses the physical BOOT button (located next to the micro SD card slot
   - **Double Click (again):** Stops recording and automatically sends the audio payload via HTTP POST to your remote server backend, waiting for and displaying the response.
   - **Single Click:** Cancels the recording/waiting state and exits back to the previous menu.
 
+## Gallery
+
+<img width="4096" height="3072" alt="IMG20261024164456" src="https://github.com/user-attachments/assets/067e3838-ff0b-4b7d-ae0e-f604f2522b05" />
+<img width="4096" height="3072" alt="IMG20261024164504" src="https://github.com/user-attachments/assets/d288e248-c45f-44a6-ad5d-02f7cbd67fa3" />
+<img width="4096" height="3072" alt="IMG20261024164529" src="https://github.com/user-attachments/assets/fb48693a-3811-425a-ab82-488d61afd60d" />
+<img width="4096" height="3072" alt="IMG20261024164603" src="https://github.com/user-attachments/assets/279c06ca-6627-466a-a885-ed889b3e672c" />
+<img width="4096" height="3072" alt="IMG20261024164621" src="https://github.com/user-attachments/assets/2d339188-aff8-46fb-b58b-d6b1384d5dd7" />
+<img width="4096" height="3072" alt="IMG20261024164634" src="https://github.com/user-attachments/assets/4d54fd36-7952-4560-ac6e-b1f981abf6fd" />
+
+
 ## License
 
 This project is open-source and available under the terms of the MIT License.
