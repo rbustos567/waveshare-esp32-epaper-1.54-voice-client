@@ -27,12 +27,58 @@ Ensure you have the official ESP-IDF (v5.x recommended) framework installed and 
 . $HOME/esp/esp-idf/export.sh
 ```
 
-## Configuration (menuconfig)
+## Configuration (menuconfig & Source Defines)
+Before compiling, you need to configure your network credentials and server endpoint:
 
-Before compiling, configure your project-specific parameters (such as Wi-Fi credentials, server endpoints, or partition tables if applicable):
+1. Open main/wifi_manager.h and define your Wi-Fi SSID and password:
+```bash
+#define WIFI_SSID           "<Your Wifi SSID>"
+#define WIFI_PASS           "<Your Wifi Password>"
+```
+2. Open main/api_client.h and configure your backend server IP address and endpoint:
+```bash
+#define API_C_SERVER_URL      "http://<YOUR SERVER IP ADDRESS>:8000/process-audio"
+```
+3. Run the project configuration tool to adjust any other system parameters if needed:
 ```bash
 idf.py menuconfig
 ```
-1. Navigate to your custom component settings to verify network options.
+4. Save and exit after verifying your configurations.
 
-2. Save and exit.
+
+## Building and Flashing
+Follow these steps to build, flash, and monitor the firmware on your Waveshare ESP32-S3 e-Paper device:
+
+1. Connect the Board: Plug your ESP32-S3 board into your computer via the USB port.
+2. Set the Target (if not already configured):
+```bash
+idf.py set-target esp32s3
+```
+3. Build the Project:
+Compile the source code to generate the binaries:
+```bash
+idf.py build
+```
+4. Flash to the Device:
+Replace /dev/ttyUSB0 with your actual serial port (e.g., /dev/COM3 on Windows or /dev/ttyACM0 on Linux):
+```bash
+idf.py -p /dev/ttyUSB0 flash
+```
+5. Monitor Serial Output:
+Open the serial monitor to view real-time logs and debug output:
+```bash
+idf.py -p /dev/ttyUSB0 monitor
+```
+(Tip: Press Ctrl+] to exit the monitor).
+
+## Project Structure
+
+- **main/main.cpp:** Entry point (app_main), system boot initialization, and wakeup cause handling.
+- **main/ui_control.c:** UI state machine and button event queue processing tasks.
+- **main/api_client.c:** HTTP client communication, multipart/binary payload transmission, and header parsers.
+- **main/time_manager.c:** SNTP time synchronization and timezone persistence via NVS.
+- **main/power_manager.c:** Sleep timeout management and battery monitoring.
+
+## License
+
+This project is open-source and available under the terms of the MIT License.
