@@ -89,7 +89,7 @@ The device uses the physical BOOT button (located next to the micro SD card slot
   - **Double Click:** Select and enter the currently highlighted menu option or submenu.
 - **Audio Command Workflow:**
   - Navigate to the **Audio Command** option and double-click to select it; this brings up the recording screen.
-  - **Double Click:** Starts recording audio.
+  - **Double Click:** Initiates the recording state. Wait until the screen displays **STATUS: Recording...** before starting to speak.
   - **Double Click (again):** Stops recording and automatically sends the audio payload via HTTP POST to your remote server backend, waiting for and displaying the response.
   - **Single Click:** Cancels the recording/waiting state and exits back to the previous menu.
 
