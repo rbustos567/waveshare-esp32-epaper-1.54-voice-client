@@ -79,6 +79,13 @@ idf.py -p /dev/ttyUSB0 monitor
 - **main/time_manager.c:** SNTP time synchronization and timezone persistence via NVS.
 - **main/power_manager.c:** Sleep timeout management and battery monitoring.
 
+## Device Usage & Navigation
+
+The device uses the physical BOOT button (located next to the micro SD card slot) as the primary input control, utilizing a combination of single and double clicks managed by a debounced FreeRTOS task.
+- **Splash Screen to Main Menu:**
+  - Double-click the BOOT button from the initial informational splash screen to enter the main menu. 
+
+
 ## License
 
 This project is open-source and available under the terms of the MIT License.
