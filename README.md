@@ -2,6 +2,8 @@
 
 Firmware for the Waveshare ESP32-S3 e-Paper 1.54" development board, designed for low-power operation, robust FreeRTOS task management, NVS persistence, NTP synchronization, and secure HTTP audio streaming to a remote server backend.
 
+<img width="4096" height="3072" alt="IMG20261024164440" src="https://github.com/user-attachments/assets/d87208ca-fac7-4133-b2b1-085c01697363" />
+
 ## Features
 
 - **Low-Power & Power Holding Control:** Keeps the circuit powered via a latching GPIO pin (GPIO17) to run independently on LiPo battery power.
