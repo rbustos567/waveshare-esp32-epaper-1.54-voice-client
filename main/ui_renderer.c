@@ -5,25 +5,34 @@ static const char *TAG = "UI_RENDERER";
 esp_err_t render_draw_battery_icon_top_right(int percentage) {
     esp_err_t ret = ESP_OK;
 
-    // Posición X calculada para alineación derecha en 200px
-    // Ancho total del componente: Batería (24px) + Borne (2px) + Espacio (4px) + Texto 100% (~32px) = ~62px
+    if (percentage < 0 || percentage > 100) {
+        ESP_LOGW(TAG, "Battery percentage out of bounds (%d), clamping to 0-100", percentage);
+        if (percentage < 0)
+	    percentage = 0;
+
+        if (percentage > 100) 
+	    percentage = 100;
+    }
+
+    /* Calculated X position for right alignment in 200px */
+    /* Total component width: Battery (24px) + Terminal (2px) + Spacing (4px) + Text 100% (~32px) = ~62px */
     UWORD start_x = 170;
     UWORD start_y = 8;
     UWORD width = 20;
     UWORD height = 10;
 
-    // 1. Cuerpo de la batería
+    // 1. Battery body
     Paint_DrawRectangle(start_x, start_y, start_x + width, start_y + height, BLACK, DOT_PIXEL_1X1, DRAW_FILL_EMPTY);
 
-    // 2. Pila
+    // 2. Battery Terminal
     Paint_DrawRectangle(start_x + width, start_y + 3, start_x + width + 2, start_y + height - 3, BLACK, DOT_PIXEL_1X1, DRAW_FILL_EMPTY );
     
-    // 3. Nivel de carga interno
+    // 3. Internal fill level
     UWORD fill_width = ((width - 4) * percentage) / 100;
     if (fill_width > 0)
         Paint_DrawRectangle(start_x + 2, start_y + 2, start_x + 2 + fill_width, start_y + height - 1, BLACK, DOT_PIXEL_1X1, DRAW_FILL_FULL);
 
-    // 4. Texto directo del porcentaje (ej. "100%" o "85%")
+    // 4. Direct percentage text (e.g. "100%" or "85%")
     char bstr[8];
     UWORD alig_x = 32;
     snprintf(bstr, sizeof(bstr), "%d%%", percentage);
@@ -32,7 +41,7 @@ esp_err_t render_draw_battery_icon_top_right(int percentage) {
     } else if (percentage <= 9 && percentage >= 0) {
         alig_x = 18;
     }
-    Paint_DrawString_EN(start_x - alig_x, start_y, bstr, &Font12, BLACK, WHITE);
+    Paint_DrawString_EN(start_x - alig_x, start_y, bstr, UI_MENU_BATTERY_FONT, BLACK, WHITE);
 
     return ret;
 }
@@ -40,62 +49,68 @@ esp_err_t render_draw_battery_icon_top_right(int percentage) {
 esp_err_t render_splash_to_buffer(const char *status_msg) {
     esp_err_t ret = ESP_OK;
 
-    // Limpiar buffer (Fondo blanco)
+    /* Clear buffer (White background) */
     Paint_Clear(WHITE);
 
-    // -------------------------------------------------------------------------
-    // ENCABEZADO: Fecha (Izquierda) y Batería (Derecha) | Y: 0 a 24
-    // -------------------------------------------------------------------------
+    /* ------------------------------------------------------------------ */
+    /* HEADER: Date (Left) and Battery (Right) | Y: 0 to 24               */
+    /* ------------------------------------------------------------------ */
     time_t now = time(NULL);
     struct tm timeinfo;
     localtime_r(&now, &timeinfo);
 
-    // 1. Fecha en la Esquina Superior Izquierda
+    /* 1. Date in Top-Left Corner */
     char date_str[16];
     strftime(date_str, sizeof(date_str), "%Y-%m-%d", &timeinfo);
-    Paint_DrawString_EN(8, 8, date_str, &Font12, BLACK, WHITE);
+    Paint_DrawString_EN(8, 8, date_str, UI_MENU_DATE_FONT, BLACK, WHITE);
 
-    // 2. Batería en la Esquina Superior Derecha (Sin "BAT:")
-    int battery_pct = battery_get_percentage();
-    render_draw_battery_icon_top_right(battery_pct);
+    /* 2. Battery in Top-Right Corner */
+    int battery_pct = 0;
+    if (battery_get_percentage(&battery_pct) == ESP_OK) {
+        render_draw_battery_icon_top_right(battery_pct);
+    } else {
+	/* Fallback default value or warning if reading fails */
+        render_draw_battery_icon_top_right(0); 
+    }
 
-    // Línea separadora horizontal del encabezado
+    /* Horizontal header separator line */
     Paint_DrawLine(1, 24, 199, 24, BLACK, DOT_PIXEL_1X1, LINE_STYLE_SOLID);
 
-    // -------------------------------------------------------------------------
-    // BLOQUE PRINCIPAL: Hora Centrada | Y: 25 a 100
-    // -------------------------------------------------------------------------
+    /* ------------------------------------------------------------------ */
+    /* MAIN BLOCK: Centered Time | Y: 25 to 100                           */
+    /* ------------------------------------------------------------------ */
     char time_str[16];
     char tz_code[8];
     strftime(time_str, sizeof(time_str), "%H:%M", &timeinfo);
     strftime(tz_code, sizeof(tz_code), "%Z", &timeinfo);
 
-    ESP_LOGI(TAG, "Epoch: %lld | Hora Local: %02d:%02d | TZ env: %s", 
-         (long long)now, timeinfo.tm_hour, timeinfo.tm_min, getenv("TZ"));
+    ESP_LOGD(TAG, "Epoch: %lld | Local Time: %02d:%02d | TZ env: %s",
+             (long long)now, timeinfo.tm_hour, timeinfo.tm_min, getenv("TZ") ? getenv("TZ") : "Not set");
 
-    // Hora grande en Font24 (~85px de ancho, centrada desde X=57)
-    Paint_DrawString_EN(57, 40, time_str, &Font24, BLACK, WHITE);
+    /* Large time in Font24 (~85px wide, centered from X=57) */
+    Paint_DrawString_EN(57, 40, time_str, UI_MENU_TIME_FONT, BLACK, WHITE);
 
-    // Indicador de zona horaria / etiqueta secundaria
-    Paint_DrawString_EN(86, 70, tz_code, &Font12, BLACK, WHITE);
+    /* Timezone indicator / secondary label */
+    Paint_DrawString_EN(86, 70, tz_code, UI_MENU_TIMEZONE_FONT, BLACK, WHITE);
 
-    // Línea separadora media
+    /* Middle separator line */
     Paint_DrawLine(1, 100, 199, 100, BLACK, DOT_PIXEL_1X1, LINE_STYLE_SOLID);
 
-    // -------------------------------------------------------------------------
-    // PIE DE PÁGINA: Uptime del Sistema | Y: 101 a 200
-    // -------------------------------------------------------------------------
-    Paint_DrawString_EN(12, 112, "SYSTEM UPTIME", &Font12, BLACK, WHITE);
+    /* ------------------------------------------------------------------ */
+    /* FOOTER: System Uptime | Y: 101 to 200                              */
+    /* ------------------------------------------------------------------ */
+    Paint_DrawString_EN(12, 112, UI_MENU_SYS_UPTIME_STR, UI_MENU_SYS_UPTIME_T_FONT, BLACK, WHITE);
 
-    // Uptime acumulado persistente
+    /* Persistent accumulated uptime */
     char uptime_str[32];
-    uptime_get_formatted(uptime_str, sizeof(uptime_str));
-    Paint_DrawString_EN(12, 132, uptime_str, &Font16, BLACK, WHITE);
+    if (uptime_get_formatted(uptime_str, sizeof(uptime_str)) == ESP_OK) {
+        Paint_DrawString_EN(12, 132, uptime_str, UI_MENU_SYS_UPTIME_FONT, BLACK, WHITE);
+    }
 
-    // Estado general del sistema
-    Paint_DrawString_EN(12, 172, "STATUS:", &Font12, BLACK, WHITE);
+    /* System general status */
+    Paint_DrawString_EN(12, 172, UI_MENU_STATUS_T_STR, UI_MENU_STATUS_FONT, BLACK, WHITE);
     if (status_msg)
-        Paint_DrawString_EN(68, 172, status_msg, &Font12, BLACK, WHITE);
+        Paint_DrawString_EN(68, 172, status_msg, UI_MENU_STATUS_FONT, BLACK, WHITE);
 
     return ret;
 }
@@ -103,43 +118,41 @@ esp_err_t render_splash_to_buffer(const char *status_msg) {
 esp_err_t render_voice_screen_to_buffer(const char *status_msg, const char *server_output_msg) {
     esp_err_t ret = ESP_OK;
 
-    // Limpiar buffer (Fondo blanco)
+    /* Clear buffer (White background) */
     Paint_Clear(WHITE);
 
-    // ----------------------------------------------------
-    // 1. ENCABEZADO: Estado del Sistema | Y: 0 a 24
-    // ----------------------------------------------------
-    Paint_DrawString_EN(8, 8, "STATUS:", &Font12, BLACK, WHITE);
+    /* ------------------------------------------------------------------ */
+    /* 1. HEADER: System Status | Y: 0 to 24                              */
+    /* ------------------------------------------------------------------ */
+    Paint_DrawString_EN(8, 8, UI_REC_STATUS_T_STR, UI_REC_STATUS_FONT, BLACK, WHITE);
     if (status_msg) {
-        Paint_DrawString_EN(60, 8, (char *)status_msg, &Font12, BLACK, WHITE);
+        Paint_DrawString_EN(60, 8, (char *)status_msg, UI_REC_STATUS_FONT, BLACK, WHITE);
     }
 
-    // Línea separadora horizontal del encabezado
+    /* Horizontal header separator line */
     Paint_DrawLine(1, 24, 199, 24, BLACK, DOT_PIXEL_1X1, LINE_STYLE_SOLID);
 
-    // ----------------------------------------------------
-    // 2. BLOQUE PRINCIPAL: Resultado / Output del Server | Y: 25 a 170
-    // ----------------------------------------------------
-    Paint_DrawString_EN(12, 35, "SERVER RESPONSE:", &Font12, BLACK, WHITE);
-
-    if (server_output_msg && strlen(server_output_msg) > 0) {
-        // Pintamos el mensaje o la salida del comando centrada/ajustada en el cuerpo
-        Paint_DrawString_EN(12, 60, (char *)server_output_msg, &Font12, BLACK, WHITE);
+    /* ------------------------------------------------------------------ */
+    /* 2. MAIN BLOCK: Result / Server Output | Y: 25 to 170               */
+    /* ------------------------------------------------------------------ */
+    if (server_output_msg != NULL && strlen(server_output_msg) > 0) {
+        /* Render centered/adjusted message or command output in the body */
+        Paint_DrawString_EN(12, 35, (char *)server_output_msg, UI_REC_SVR_OUT_FONT, BLACK, WHITE);
     } else {
-        Paint_DrawString_EN(12, 60, "", &Font12, BLACK, WHITE);
+        Paint_DrawString_EN(12, 35, "", UI_REC_SVR_OUT_FONT, BLACK, WHITE);
     }
 
-    // Línea separadora inferior
+    /* Bottom separator line */
     Paint_DrawLine(1, 168, 199, 168, BLACK, DOT_PIXEL_1X1, LINE_STYLE_SOLID);
 
-    // ----------------------------------------------------
-    // 3. PIE DE PÁGINA: Guía de Botones (Esquinas) | Y: 176 a 200
-    // ----------------------------------------------------
-    // Renglón superior: 2-Click para Grabar/Parar
-    Paint_DrawString_EN(8, 172, "2-Click: Rec/Stop", &Font12, BLACK, WHITE);
+    /* ------------------------------------------------------------------ */
+    /* 3. FOOTER: Button Guide (Corners) | Y: 176 to 200                  */
+    /* ------------------------------------------------------------------ */
+    /* Upper row: 2-Click for Record/Stop */
+    Paint_DrawString_EN(8, 172, UI_REC_2_CLK_STR, UI_REC_CLICK_MSG_FONT, BLACK, WHITE);
 
-    // Renglón inferior: 1-Click para Salir
-    Paint_DrawString_EN(8, 186, "1-Click: Exit", &Font12, BLACK, WHITE);
+    /* Lower row: 1-Click to Exit */
+    Paint_DrawString_EN(8, 186, UI_REC_1_CLK_STR, UI_REC_CLICK_MSG_FONT, BLACK, WHITE);
 
     return ret;
 }
@@ -167,17 +180,17 @@ esp_err_t render_edit_screen_to_buffer(void) {
     const char *unit_suffix = get_menu_active_editor_unit_suffix();  
     int curr_val = get_menu_active_editor_current_val();
 
-    // Obtener la función formateadora
+    /* Get formatting function */
     const char* (*get_label)(int) = get_menu_active_editor_get_label();
 
     if (get_label != NULL) {
-        // Para elementos basados en listas/lookup tables (Timezone, Sleep Timeout)
+	/* For list-based elements / lookup tables (Timezone, Sleep Timeout) */
         snprintf(val_str, sizeof(val_str), "%s", get_label(curr_val));
     } else if (unit_suffix != NULL && strlen(unit_suffix) > 0) {
-        // Para valores numéricos con sufijo (ej: "80 %")
+	/* For numeric values with suffix (e.g., "80 %") */
         snprintf(val_str, sizeof(val_str), "%d %s", curr_val, unit_suffix);
     } else {
-        // Para enteros simples sin sufijo (ej: "10")
+	/* For simple integers without suffix (e.g., "10") */
         snprintf(val_str, sizeof(val_str), "%d", curr_val);
     }
 
@@ -280,8 +293,7 @@ esp_err_t render_partial_with_text(const char *status_msg, const char *output_ms
     ret = render(status_msg, output_msg);
     if (ret != ESP_OK)
         return ret;
-    
-    ESP_LOGI(TAG, "Ejecutando render_partial con nuevos mensajes...");
+
     ret = epd_display_update_partial();
 
     return ret;
@@ -294,7 +306,6 @@ esp_err_t render_partial(void) {
     if (ret != ESP_OK)
         return ret;
 
-    ESP_LOGI(TAG, "render_partial"); 
     ret = epd_display_update_partial();
 
     return ret;

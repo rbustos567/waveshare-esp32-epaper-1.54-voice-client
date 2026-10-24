@@ -18,8 +18,9 @@
 extern "C" {
 #endif
 
-#define WIFI_SSID           "YOUR WIFI SSID"
-#define WIFI_PASS           "YOUR WIFI PASSWORD"
+// IMPORTANT: Need to add your Wifi SSID and password in these two variables
+#define WIFI_SSID           "<Your Wifi SSID>"
+#define WIFI_PASS           "<Your Wifi Password>" 
 
 #define MAXIMUM_RETRY       5
 #define WIFI_TIMEOUT_MS     12000

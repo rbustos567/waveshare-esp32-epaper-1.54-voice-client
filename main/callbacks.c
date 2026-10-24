@@ -2,41 +2,45 @@
 
 static const char *TAG = "CALLBACKS";
 
-void action_demo(void) {
-
-}
-
-void action_cancel_voice_session(void) {
-    
+/**
+ * @brief Cancels the active voice session and stops physical recording if active.
+ */
+void action_cancel_voice_session(void)
+{
     set_cancel_voice_session(true);
 
     if (audio_manager_is_recording()) {
-        // Forzamos detener la grabación física si estaba activa
+        /* Force stop physical recording if it was active */
         audio_manager_toggle_recording();
     }
 }
 
+/**
+ * @brief Background orchestration task for recording audio and sending it via HTTP.
+ */
 static void voice_session_task(void *pvParameters) {
-    ESP_LOGI(TAG, "Iniciando sesión de voz...");
+
+    ESP_LOGI(TAG, "Starting voice session task...");
 
     set_cancel_voice_session(false);
-    // 1. ESTADO: Grabando audio
-    // Actualizamos la pantalla visualmente
+
+    /* 1. STATE: Recording audio */
+    /* Update visual screen */
     render_partial_with_text("Recording...", "Speak your command...");
 
-    // Iniciamos la grabación (primer doble clic)
+    /* Start recording (first double-click trigger) */
     audio_manager_toggle_recording();
 
-    // Esperar mientras el usuario graba (hasta el segundo doble clic)
+    /* Wait while the user is recording (until the second double-click or cancellation) */
     while (audio_manager_is_recording() && !get_cancel_voice_session()) {
         vTaskDelay(pdMS_TO_TICKS(50));
     }
 
-    // SI EL USUARIO CANCELÓ CON UN CLIC:
+    /* IF THE USER CANCELLED WITH A SINGLE CLICK: */
     if (get_cancel_voice_session()) {
-        ESP_LOGI(TAG, "Sesión de voz cancelada por el usuario. Descartando audio.");
+        ESP_LOGI(TAG, "Voice session cancelled by user. Discarding audio.");
 
-	// Asegurarnos de detener la grabación para que record_task salga de su bucle y muera sola
+        /* Ensure recording stops so record_task exits its loop and terminates */
         if (audio_manager_is_recording()) {
             audio_manager_toggle_recording();
         }
@@ -45,59 +49,54 @@ static void voice_session_task(void *pvParameters) {
         return;
     }
 
-    // 2. ESTADO: Enviando HTTP request
+    /* 2. STATE: Sending HTTP request */
     if (audio_manager_get_recorded_bytes() > 0) {
-       
-	// ACTIVAR CANDADO TOTAL: Nadie puede interrumpir la comunicación HTTP
-	set_is_waiting_response(true);
+        
+        /* ENABLE TOTAL LOCK: Nobody can interrupt HTTP communication */
+        set_is_waiting_response(true);
 
-	ESP_LOGI(TAG, "Enviando audio por HTTP...");
-
+        ESP_LOGI(TAG, "Sending audio via HTTP...");
         render_partial_with_text("Sending to server...", "Uploading audio to server...");
 
-	char server_response_buf[256] = {0};
+        char server_response_buf[API_C_REMOTE_CMD_OUT_SIZE] = {0};
 
-        // Ejecutamos la petición HTTP (bloquea brevemente hasta recibir respuesta)
-        api_client_send_audio(server_response_buf, sizeof(server_response_buf));
+        /* Execute HTTP request (blocks briefly until response is received) */
+        esp_err_t err = api_client_send_audio(server_response_buf, sizeof(server_response_buf));
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to send audio via HTTP: %s", esp_err_to_name(err));
+            snprintf(server_response_buf, sizeof(server_response_buf), "Network Error");
+        }
 
-        const char * server_response = api_client_get_remote_cmd_output();
+        const char *server_response = api_client_get_remote_cmd_output();
 
-	if (strlen(server_response) > 0) {
+        if (server_response != NULL && strlen(server_response) > 0) {
             render_partial_with_text("Ready to record", server_response);
         } else {
             render_partial_with_text("Ready to record", "Done.");
         }
 
-	// LIBERAR CANDADO TOTAL: El ciclo ha terminado con éxito
-	set_is_waiting_response(false);
+        /* RELEASE TOTAL LOCK: The cycle has finished successfully */
+        set_is_waiting_response(false);
 
-	//const char *cmd_res = api_client_get_last_cmd_output();
-        //if (cmd_res && strlen(cmd_res) > 0) {
-	//    render_partial_with_text("Ready to record", cmd_res);
-	//} else {
-        //    render_partial_with_text("Ready to record", "Command executed.");
-        //    vTaskDelay(pdMS_TO_TICKS(5000)); // Dejar el resultado visible por 5 segundos
-        //}
     } else {
-        ESP_LOGW(TAG, "No se grabó audio.");
-	set_is_waiting_response(false);
+        ESP_LOGW(TAG, "No audio recorded.");
+        set_is_waiting_response(false);
     }
-
-    // 3. Finalizar y regresar al menú principal
-//    vTaskDelay(pdMS_TO_TICKS(1000)); // Pausa breve de 1s para que alcance a leer el mensaje de envío
-//    set_current_ui_state(UI_STATE_MENU);
-//    render_full(NULL, NULL); // Restaura la vista del menú
 
     vTaskDelete(NULL);
 }
 
-void action_record_and_send_audio(void) {
+/**
+ * @brief Triggers the voice recording and sending workflow via FreeRTOS task.
+ */
+void action_record_and_send_audio(void)
+{
     if (!audio_manager_is_recording() && !get_is_waiting_response()) {
-        // Cambiamos el estado de la UI para bloquear interacciones del menú
+        /* Change UI state to block menu interactions */
         set_current_ui_state(UI_STATE_VOICE_RECORDING);
-        
-        // Lanzamos la tarea de orquestación en el Core 1
-        xTaskCreatePinnedToCore(
+
+        /* Launch orchestration task on Core 1 */
+        BaseType_t task_created = xTaskCreatePinnedToCore(
             voice_session_task,
             "voice_session_task",
             4096,
@@ -106,58 +105,84 @@ void action_record_and_send_audio(void) {
             NULL,
             1
         );
+
+        if (task_created != pdPASS) {
+            ESP_LOGE(TAG, "Failed to create voice_session_task");
+            // Fallback: restore UI state if task creation failed
+            set_current_ui_state(UI_STATE_MENU);
+	    reset_to_root_menu();
+            render_full(NULL, NULL);
+
+            return;
+        }
     } else if (audio_manager_is_recording()) {
-        // Segundo doble clic: detiene la grabación en curso
-        audio_manager_toggle_recording();
+        /* Second double click: stops ongoing recording */
+        esp_err_t err = audio_manager_toggle_recording();
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to toggle audio recording stop: %s", esp_err_to_name(err));
+        }
     }
 }
-
+/**
+ * @brief Toggles audio recording state.
+ */
 void action_record_audio(void) {
+
     audio_manager_toggle_recording();
 }
 
-void action_listen_audio(void) {
-
-    audio_manager_play_recorded_audio();
-}
-
-// void action_send_audio(void) {
-//    api_client_send_audio();    
-//}
-
-void action_save_timezone(int selected_index) {
+/**
+ * @brief Saves the selected timezone index to NVS and applies it immediately.
+ */
+void action_save_timezone(int selected_index)
+{
     esp_err_t ret = ESP_OK;
 
     ESP_LOGI(TAG, "Before set_current_tz_index");
     set_current_tz_index(selected_index);
 
-    // 1. Guardar en NVS
+    /* 1. Save to NVS storage */
     nvs_handle_t nvs_h;
-    if (nvs_open("storage", NVS_READWRITE, &nvs_h) == ESP_OK) {
-        nvs_set_i32(nvs_h, "tz_idx", selected_index);
-        nvs_commit(nvs_h);
+    ret = nvs_open("storage", NVS_READWRITE, &nvs_h);
+    if (ret == ESP_OK) {
+        ret = nvs_set_i32(nvs_h, "tz_idx", (int32_t)selected_index);
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to write tz_idx to NVS: %s", esp_err_to_name(ret));
+        } else {
+            ret = nvs_commit(nvs_h);
+            if (ret != ESP_OK) {
+                ESP_LOGE(TAG, "Failed to commit NVS changes: %s", esp_err_to_name(ret));
+            }
+        }
         nvs_close(nvs_h);
+    } else {
+        ESP_LOGE(TAG, "Failed to open NVS namespace 'storage': %s", esp_err_to_name(ret));
     }
 
-    // 2. Aplicar inmediatamente al sistema C / ESP-IDF
-    tz_option_t *tz_option = timezone_get_option_at(selected_index);
+    /* 2. Apply immediately to C library / ESP-IDF system */
+    const tz_option_t *tz_option = timezone_get_option_at(selected_index);
     if (tz_option != NULL && tz_option->tz_string != NULL) {
         setenv("TZ", tz_option->tz_string, 1);
         tzset();
-	ESP_LOGI(TAG, "New TimeZone set: %s", tz_option->tz_string);
+        ESP_LOGI(TAG, "New TimeZone set: %s", tz_option->tz_string);
+    } else {
+        ESP_LOGW(TAG, "Invalid timezone option or empty tz_string");
     }
 
-//    ESP_LOGI("CALLBACKS", "Completed!");
+    ESP_LOGI(TAG, "Timezone save completed.");
 }
 
-void action_open_tz_editor(void) {
-   
+/**
+ * @brief Opens the timezone configuration editor UI.
+ */
+void action_open_tz_editor(void)
+{
     set_menu_active_editor_title("Set TimeZone");
-    
+
     int tz_index = get_current_tz_index();
     set_menu_active_editor_current_val(tz_index);
     set_menu_active_editor_min_val(0);
-    
+
     int max_val = timezone_get_options_count() - 1;
     set_menu_active_editor_max_val(max_val);
 
@@ -170,23 +195,31 @@ void action_open_tz_editor(void) {
     render_full(NULL, NULL);
 }
 
-void action_save_sleep_timeout(int selected_index) {
+/**
+ * @brief Saves the selected sleep timeout index.
+ */
+void action_save_sleep_timeout(int selected_index)
+{
     power_manager_set_timeout_index(selected_index);
+    ESP_LOGI(TAG, "Sleep timeout index saved: %d", selected_index);
 }
 
-void action_open_sleep_timeout_editor(void) {
-
+/**
+ * @brief Opens the sleep timeout configuration editor UI.
+ */
+void action_open_sleep_timeout_editor(void)
+{
     set_menu_active_editor_title("Set Sleep Timeout");
 
     int timeout_index = power_manager_get_current_timeout_index();
     set_menu_active_editor_current_val(timeout_index);
     set_menu_active_editor_min_val(0);
 
-    int max_val = (int) power_manager_get_timeout_options_count() - 1;
+    int max_val = (int)power_manager_get_timeout_options_count() - 1;
     set_menu_active_editor_max_val(max_val);
 
     set_menu_active_editor_step(1);
-    set_menu_active_editor_unit_suffix(""); // Opcional, las etiquetas ya incluyen "s"/"min"
+    set_menu_active_editor_unit_suffix(""); /* Optional, labels already include units */
     set_menu_active_editor_get_label(get_timeout_label_wrapper);
     set_menu_active_editor_on_save(action_save_sleep_timeout);
     set_menu_active_editor_focus_index(EDITOR_FOCUS_PLUS);
@@ -194,15 +227,21 @@ void action_open_sleep_timeout_editor(void) {
     render_full(NULL, NULL);
 }
 
-void return_to_splash_screen(void) {
-
+/**
+ * @brief Returns the system view back to the splash/running screen.
+ */
+void return_to_splash_screen(void)
+{
     set_current_ui_state(UI_STATE_SPLASH);
     reset_to_root_menu();
-    //render_splash_to_buffer();
     render_full("RUNNING", NULL);
 }
 
-void action_open_audio_command_screen(void) {
+/**
+ * @brief Prepares and renders the voice command screen state.
+ */
+void action_open_audio_command_screen(void)
+{
     set_current_ui_state(UI_STATE_VOICE_RECORDING);
     render_full("Ready to record", "");
 }

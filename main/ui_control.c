@@ -8,6 +8,7 @@ static volatile bool g_cancel_voice_session = false;
 static volatile bool g_is_waiting_response = false;
 
 bool get_cancel_voice_session(void) {
+    
     return g_cancel_voice_session; 
 }
 
@@ -20,6 +21,7 @@ esp_err_t set_cancel_voice_session(bool state) {
 }
 
 bool get_is_waiting_response(void) {
+    
     return g_is_waiting_response;
 }
 
@@ -36,19 +38,21 @@ void vButtonTask(void *pvParameters) {
     const TickType_t double_click_window = pdMS_TO_TICKS(300);
     TickType_t last_press_time = 0;
     int press_count = 0;
-    int last_state = 1;
+    int last_state = 1; // Assuming pull-up configuration (1: released, 0: pressed)
 
     for (;;) {
         int current_state = gpio_get_level(BOOT_BUTTON_GPIO);
 
+	/* Detect falling edge (button press) */
         if (last_state == 1 && current_state == 0) {
-            vTaskDelay(pdMS_TO_TICKS(30)); // Debounce
+            vTaskDelay(pdMS_TO_TICKS(30)); // Debounce filter delay
             if (gpio_get_level(BOOT_BUTTON_GPIO) == 0) {
                 press_count++;
                 last_press_time = xTaskGetTickCount();
             }
         }
 
+	/* Evaluate click events once the double-click window expires */
         if (press_count > 0 && (xTaskGetTickCount() - last_press_time) > double_click_window) {
             button_event_t evt = EVENT_NONE;
             if (press_count == 1) {
@@ -64,7 +68,7 @@ void vButtonTask(void *pvParameters) {
         }
 
         last_state = current_state;
-        vTaskDelay(pdMS_TO_TICKS(15));
+        vTaskDelay(pdMS_TO_TICKS(15)); // Polling interval to yield CPU time
     }
 }
 
@@ -73,9 +77,10 @@ void vMenuTask(void *pvParameters) {
 
     for (;;) {
         if (xQueueReceive(xButtonQueue, &evt, portMAX_DELAY) == pdTRUE) {
-            // 1. REINICIAR TIMER DE INACTIVIDAD
-            power_manager_reset_inactivity();	 
-	    // Splash Screen
+            /* 1. RESET INACTIVITY TIMER */
+	    power_manager_reset_inactivity();
+
+	    /* Splash Screen */
             if (current_ui_state == UI_STATE_SPLASH) {
 		if (evt == EVENT_SINGLE_CLICK) {
 		    //render_splash_to_buffer("RUNNING");
@@ -85,7 +90,8 @@ void vMenuTask(void *pvParameters) {
                     reset_to_root_menu(); 
                     render_full(NULL, NULL);
                 }
-	    // Menu Screen
+
+	    /* Menu Screen */
             } else if (current_ui_state == UI_STATE_MENU) {
                 Menu *current_menu = get_current_menu();
                 if (!current_menu)
@@ -93,7 +99,7 @@ void vMenuTask(void *pvParameters) {
 
                 if (evt == EVENT_SINGLE_CLICK) {
                     current_menu->selected_index = (current_menu->selected_index + 1) % current_menu->num_items;
-                    ESP_LOGI(TAG, "Moving to selected index: %d", current_menu->selected_index);
+		    ESP_LOGD(TAG, "Moving to selected index: %d", current_menu->selected_index);
                     render_partial();
                 } else if (evt == EVENT_DOUBLE_CLICK) {
                     MenuItem selected = current_menu->items[current_menu->selected_index];
@@ -116,7 +122,8 @@ void vMenuTask(void *pvParameters) {
                         selected.action();
                     }
                 }
-	    // Edit Screen
+
+	    /* Edit Screen */
 	    } else if (current_ui_state == UI_STATE_EDIT_VALUE) {
                 
 		int curr_focus;
@@ -129,7 +136,7 @@ void vMenuTask(void *pvParameters) {
 		    render_partial(); 
 		} else if (evt == EVENT_DOUBLE_CLICK) {
 
-		    ESP_LOGI(TAG, "Double Click on UI_STATE_EDIT_VALUE"); 
+		    ESP_LOGD(TAG, "Double Click on UI_STATE_EDIT_VALUE"); 
 		    int curr_val, min, max, step;
 		    curr_val = get_menu_active_editor_current_val();
 
@@ -140,7 +147,7 @@ void vMenuTask(void *pvParameters) {
 			    min = get_menu_active_editor_min_val();
                             curr_val += step;
                             if (curr_val > max)
-                                set_menu_active_editor_current_val(min); // Rollover o límite
+                                set_menu_active_editor_current_val(min); // Rollover or limit
                             else
                                 set_menu_active_editor_current_val(curr_val);
 
@@ -153,7 +160,7 @@ void vMenuTask(void *pvParameters) {
                             min = get_menu_active_editor_min_val();
                             curr_val -= step;
                             if (curr_val < min)
-                                set_menu_active_editor_current_val(max); // Rollover o límite
+                                set_menu_active_editor_current_val(max); // Rollover or limit
 			    else
                                 set_menu_active_editor_current_val(curr_val);
 
@@ -161,51 +168,47 @@ void vMenuTask(void *pvParameters) {
                             break;
 
                         case EDITOR_FOCUS_SAVE:
-			    ESP_LOGI(TAG, "Before get_menu_active_editor_on_save");
+			    ESP_LOGD(TAG, "Before get_menu_active_editor_on_save");
 			    void (*save_cb)(int) = get_menu_active_editor_on_save();
 
 			    if (save_cb != NULL) {
-				ESP_LOGI(TAG, "Before calling callback");
+				ESP_LOGD(TAG, "Before calling callback");
                                 save_cb(curr_val); 
 			    }
-                            //if (editor->on_save != NULL) {
-                            //    editor->on_save(editor->current_val); // Llama al callback setter (RAM/NVS)
-                            //}
-			    ESP_LOGI(TAG, "Before changing to UI_STATE_MENU");
+			    ESP_LOGD(TAG, "Before changing to UI_STATE_MENU");
                             set_current_ui_state(UI_STATE_MENU);
-			    ESP_LOGI(TAG, "Before render_full");
+			    ESP_LOGD(TAG, "Before render_full");
                             render_full(NULL, NULL);
                             break;
 
                         case EDITOR_FOCUS_EXIT:
-                            // Sale sin guardar los cambios
+			    /* Exit without saving changes */
                             set_current_ui_state(UI_STATE_MENU);
                             render_full(NULL, NULL);
                             break;
                     }   
                 }
-	    // Voice command Workflow
+
+	    /* Voice command Workflow */
 	    } else if (current_ui_state == UI_STATE_VOICE_RECORDING) {
 		
 		if (!get_is_waiting_response()) {
 
                     if (evt == EVENT_SINGLE_CLICK) {
-		        ESP_LOGI(TAG, "Cancelación detectada. Volviendo al menú principal...");
+			ESP_LOGD(TAG, "Cancellation detected. Returning to main menu...");
 
 	                action_cancel_voice_session();
-		        //vTaskDelay(pdMS_TO_TICKS(300));
-                        ESP_LOGI(TAG, "Regresando a Menu principal...");
+			ESP_LOGD(TAG, "Returning to Main Menu...");
 		        Menu *current_menu = get_current_menu();
                         current_menu->selected_index = 0; // Reset index when exit
                         set_current_ui_state(UI_STATE_MENU);
 	            
 		        render_full(NULL, NULL); 
                     } else if (evt == EVENT_DOUBLE_CLICK) {
-                        //render_partial_with_text("Recording...", NULL);
 		        action_record_and_send_audio(); 
 	            }
 	        } else {
-	            ESP_LOGI(TAG, "Esperando respuesta del server, ignorando click...");
+		    ESP_LOGD(TAG, "Waiting for server response, ignoring click...");
 	        }	    
             }
         }
@@ -249,6 +252,7 @@ esp_err_t ui_control_init(void) {
 }
 
 ui_state_t get_current_ui_state(void) {
+    
     return current_ui_state;
 }
 

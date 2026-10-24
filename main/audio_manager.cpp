@@ -2,47 +2,51 @@
 #include "audio_bsp.h"
 #include "board_power_bsp.h"
 #include "driver/gpio.h"
-#include "Config/DEV_Config.h" // Para reutilizar los defines existentes si gustas
-			       //
-static const char *TAG = "audio_manager";
+#include "Config/DEV_Config.h"
+			      
+static const char *TAG = "AUDIO_MANAGER";
 
 board_power_bsp_t board_div(EPD_PWR_PIN,Audio_PWR_PIN,VBAT_PWR_PIN);
 
-// Variables de estado y buffers internos de audio
-#define MAX_AUDIO_BUF_SIZE  (30 * 16000 * 2) // Ejemplo de buffer (30s aprox)
-#define CHUNK_SIZE          2048
-#define BYTES_PER_SEC (16000 * 2) // Ajusta según tu tasa de muestreo y canales (ej. 16kHz, 16-bit)
+// Internal audio state variables and buffers
+#define MAX_AUDIO_BUF_SIZE     (30 * 16000 * 2) // Example buffer (~30 seconds at 16kHz 16-bit)
+#define CHUNK_SIZE             2048
+#define BYTES_PER_SEC          (16000 * 2)      // Adjust according to sample rate and channels (e.g. 16kHz, 16-bit)
 
-static uint8_t *s_audio_ptr = NULL; 
+static uint8_t *s_audio_ptr = NULL;
 static volatile bool s_is_recording = false;
 static size_t s_actual_recorded_bytes = 0;
 static TaskHandle_t s_record_task_handle = NULL;
 static uint8_t *s_rx_audio_ptr = NULL;
 static size_t s_rx_recorded_bytes = 0;
 
-// Tarea privada que corre en segundo plano (Core 1)
-static void record_task(void *pvParameters) {
-
+/**
+ * @brief Background task running on Core 1 for audio recording.
+ */
+static void record_task(void *pvParameters)
+{
     size_t chunk_to_read = CHUNK_SIZE;
-    memset(s_audio_ptr, 0, MAX_AUDIO_BUF_SIZE);
+    
+    if (s_audio_ptr != NULL) {
+        memset(s_audio_ptr, 0, MAX_AUDIO_BUF_SIZE);
+    }
 
-    ESP_LOGI(TAG, "Iniciando captura de audio...");
+    ESP_LOGI(TAG, "Starting audio capture...");
 
     while (s_is_recording && (s_actual_recorded_bytes < MAX_AUDIO_BUF_SIZE)) {
         if (s_actual_recorded_bytes + chunk_to_read > MAX_AUDIO_BUF_SIZE) {
             chunk_to_read = MAX_AUDIO_BUF_SIZE - s_actual_recorded_bytes;
         }
-        
-        // Lectura desde el códec/I2S
-        // audio_playback_read(...) o la función que uses para leer el mic
+
+        /* Read from codec/I2S */
         audio_playback_read(s_audio_ptr + s_actual_recorded_bytes, chunk_to_read);
         s_actual_recorded_bytes += chunk_to_read;
-        
-        vTaskDelay(pdMS_TO_TICKS(1)); // Cede control para evitar Watchdog
+
+        vTaskDelay(pdMS_TO_TICKS(1)); // Yield control to prevent watchdog trigger
     }
 
     s_is_recording = false;
-    ESP_LOGI(TAG, "Grabación finalizada. Total: %d bytes", s_actual_recorded_bytes);
+    ESP_LOGI(TAG, "Recording finished. Total: %u bytes", (unsigned int)s_actual_recorded_bytes);
 
     s_record_task_handle = NULL;
     vTaskDelete(NULL);
@@ -51,56 +55,65 @@ static void record_task(void *pvParameters) {
 esp_err_t audio_manager_init(void) {
     esp_err_t ret = ESP_OK;
 
-    // 1. Encender energía de audio mediante el BSP
+    /* 1. Turn on audio power via BSP */
     board_div.POWEER_Audio_ON();
-//    vTaskDelay(pdMS_TO_TICKS(50));
 
-    // 2. Verificar y reservar memoria en PSRAM
-    size_t spiram_total = heap_caps_get_total_size(MALLOC_CAP_SPIRAM);
-    size_t spiram_free  = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+    /* 2. Verify and allocate memory in PSRAM */
+    size_t psram_total = heap_caps_get_total_size(MALLOC_CAP_SPIRAM);
+    size_t psram_free = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
 
-    ESP_LOGI(TAG, "PSRAM Total: %u bytes | PSRAM Libre: %u bytes", spiram_total, spiram_free);
+    ESP_LOGI(TAG, "PSRAM Total: %u bytes | PSRAM Free: %u bytes", (unsigned int)psram_total, (unsigned int)psram_free);
 
-    if (spiram_total == 0) {
-        ESP_LOGE(TAG, "¡Atención! La PSRAM no está detectada o no está habilitada en sdkconfig.");
+    if (psram_total == 0) {
+        ESP_LOGE(TAG, "Warning! PSRAM not detected or not enabled in sdkconfig.");
+        board_div.POWEER_Audio_OFF();
         return ESP_ERR_NOT_SUPPORTED;
     }
 
-    // Reservar buffer de grabación
+    /* Allocate recording buffer */
     s_audio_ptr = (uint8_t *)heap_caps_malloc(MAX_AUDIO_BUF_SIZE, MALLOC_CAP_SPIRAM);
     if (s_audio_ptr == NULL) {
-        ESP_LOGE(TAG, "Error al asignar %d bytes en PSRAM para s_audio_ptr", MAX_AUDIO_BUF_SIZE);
+        ESP_LOGE(TAG, "Failed to allocate %u bytes in PSRAM for s_audio_ptr", (unsigned int)MAX_AUDIO_BUF_SIZE);
+        board_div.POWEER_Audio_OFF();
         return ESP_ERR_NO_MEM;
     }
-    ESP_LOGI(TAG, "Buffer s_audio_ptr con %d bytes asignados en PSRAM correctamente", MAX_AUDIO_BUF_SIZE);
+    ESP_LOGI(TAG, "Buffer s_audio_ptr successfully allocated with %u bytes in PSRAM", (unsigned int)MAX_AUDIO_BUF_SIZE);
 
-    // Reservar buffer de recepción de red/servidor (si lo sigues usando)
+    /* Allocate network/server RX buffer */
     s_rx_audio_ptr = (uint8_t *)heap_caps_malloc(MAX_AUDIO_BUF_SIZE, MALLOC_CAP_SPIRAM);
     if (s_rx_audio_ptr == NULL) {
-        ESP_LOGE(TAG, "Error al asignar %d bytes en PSRAM para s_rx_audio_ptr", MAX_AUDIO_BUF_SIZE);
+        ESP_LOGE(TAG, "Failed to allocate %u bytes in PSRAM for s_rx_audio_ptr", (unsigned int)MAX_AUDIO_BUF_SIZE);
+        free(s_audio_ptr);
+        s_audio_ptr = NULL;
+        board_div.POWEER_Audio_OFF();
         return ESP_ERR_NO_MEM;
     }
-    ESP_LOGI(TAG, "Buffer s_rx_audio_ptr con %d bytes asignados en PSRAM correctamente", MAX_AUDIO_BUF_SIZE);
+    ESP_LOGI(TAG, "Buffer s_rx_audio_ptr successfully allocated with %u bytes in PSRAM", (unsigned int)MAX_AUDIO_BUF_SIZE);
 
     audio_bsp_init();
     audio_play_init();
 
- //   board_div.POWEER_Audio_OFF();
- //   ESP_LOGI(TAG, "Hardware de audio apagado para ahorrar energía.");
+    ESP_LOGI(TAG, "Audio hardware powered off to save energy.");
 
     return ret;
 }
 
-void audio_manager_toggle_recording(void) {
+/**
+ * @brief Starts the recording process by spawning the background task.
+ */
+esp_err_t audio_manager_toggle_recording(void) {
+
+    esp_err_t ret = ESP_OK;
+
     if (s_is_recording) {
-        ESP_LOGI(TAG, "Solicitando detener grabación...");
-        s_is_recording = false; // El while de la tarea se detiene solo
+        ESP_LOGD(TAG, "Requesting to stop recording...");
+        s_is_recording = false;
     } else {
-        ESP_LOGI(TAG, "Empezando grabación...");
+        ESP_LOGD(TAG, "Starting to record...");
         s_is_recording = true;
         s_actual_recorded_bytes = 0;
 
-        xTaskCreatePinnedToCore(
+        BaseType_t task_created = xTaskCreatePinnedToCore(
             record_task,
             "record_task",
 	    4096,
@@ -109,43 +122,28 @@ void audio_manager_toggle_recording(void) {
             &s_record_task_handle,
             1
         );
-    }
-}
 
-void audio_manager_play_recorded_audio(void) {
-    if (s_audio_ptr != NULL && s_actual_recorded_bytes > 0) {
-        ESP_LOGI(TAG, "Reproduciendo %d bytes (%.2f segundos)...", 
-                 s_actual_recorded_bytes, (float)s_actual_recorded_bytes / BYTES_PER_SEC);
-       
-//        board_div.POWEER_Audio_ON();
-//        vTaskDelay(pdMS_TO_TICKS(100));	
-        // Reproduce únicamente los bytes capturados reales
-        audio_playback_write(s_audio_ptr, s_actual_recorded_bytes);
-
-//	vTaskDelay(pdMS_TO_TICKS(100));
-//	board_div.POWEER_Audio_OFF();
-//        ESP_LOGI(TAG, "Hardware de audio apagado para ahorrar energía.");
-    } else {
-        ESP_LOGW(TAG, "No hay audio grabado para reproducir");
+	if (task_created != pdPASS) {
+            s_is_recording = false;
+            ESP_LOGE(TAG, "Failed to create record_task");
+            return ESP_FAIL;
+        }
     }
+
+    return ret;
 }
 
 bool audio_manager_is_recording(void) {
+    
     return s_is_recording;
 }
 
 uint8_t* audio_manager_get_audio_ptr(void) {
+    
     return s_audio_ptr;
 }
 
 size_t audio_manager_get_recorded_bytes(void) {
-    return s_actual_recorded_bytes;
-}
 
-void audio_manager_start_recording(void) {
-    if (!s_is_recording) {
-        s_is_recording = true;
-        s_actual_recorded_bytes = 0;
-        xTaskCreatePinnedToCore(record_task, "record_task", 4096, NULL, 5, &s_record_task_handle, 1);
-    }
+    return s_actual_recorded_bytes;
 }

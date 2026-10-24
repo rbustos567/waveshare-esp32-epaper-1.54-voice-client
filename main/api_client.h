@@ -5,7 +5,7 @@
 #include "esp_err.h"
 #include "wifi_manager.h"
 #include "esp_http_client.h"
-#include "audio_manager.h" // Importas el gestor de audio para pedirle los datos
+#include "audio_manager.h"
 #include "esp_crt_bundle.h"
 #include "esp_log.h"
 #include "audio_bsp/audio_bsp.h"
@@ -16,7 +16,16 @@
 extern "C" {
 #endif
 
-#define MAX_AUDIO_BUF_SIZE  (30 * 16000 * 2) // Ejemplo de buffer (30s aprox)
+#define API_C_CMD_OUT_SIZE           1024
+#define API_C_REMOTE_CMD_OUT_SIZE    256
+#define MAX_AUDIO_BUF_SIZE  (30 * 16000 * 2) // Buffer size for aprox. 30 sec of recording
+
+// IMPORTANT: Need to add here your server ip address
+#define API_C_SERVER_URL      "http://<YOUR SERVER IP ADDRESS>:8000/process-audio"
+#define API_C_SERVER_TIMEOUT  30000
+
+#define API_C_SERVER_KEY         "API-Key"      
+#define API_C_SERVER_PASS	 "password123x"
 
 const char* api_client_get_last_cmd_output(void);
 const char* api_client_get_remote_cmd_output(void);

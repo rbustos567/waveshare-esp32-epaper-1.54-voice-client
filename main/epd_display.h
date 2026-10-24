@@ -12,6 +12,7 @@
 extern "C" {
 #endif
 
+
 #define EPD_WIDTH  200
 #define EPD_HEIGHT 200 
 #define BUFFER_SIZE ((EPD_WIDTH * EPD_HEIGHT) / 8) // Framebuffer 1-bit per píxel (5000 bytes)

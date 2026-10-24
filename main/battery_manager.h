@@ -15,26 +15,25 @@
 extern "C" {
 #endif
 
-// Configuración de hardware según la placa
+// Hardware configuration according to the board
 #define BATTERY_ADC_UNIT       ADC_UNIT_1
-#define BATTERY_ADC_CHANNEL    ADC_CHANNEL_0    // Ej. GPIO1 en ESP32-S3 (Ajustar según PCB)
-#define BATTERY_ADC_GPIO       GPIO_NUM_1       // Pin físico del ADC
+#define BATTERY_ADC_CHANNEL    ADC_CHANNEL_0    // e.g. GPIO1 on ESP32-S3 (Adjust according to PCB)
+#define BATTERY_ADC_GPIO       GPIO_NUM_1       // Physical ADC pin
 
-// Si tu placa tiene un pin de habilitación de energía/batería (ejemplo: GPIO14)
-// Si tu placa no usa pin de habilitación, puedes omitir BATTERY_PWR_EN
-#define BATTERY_PWR_EN_GPIO    GPIO_NUM_14      // Ajustar al pin de tu PCB o comentar si no aplica
+// If your board has a power/battery enable pin (example: GPIO14)
+// If your board does not use an enable pin, you can omit BATTERY_PWR_EN
+#define BATTERY_PWR_EN_GPIO     GPIO_NUM_14     // Adjust to your PCB pin or comment out if not applicable
 
-#define BATTERY_ADC_ATTEN      ADC_ATTEN_DB_12  // Rango hasta ~3.3V
+#define BATTERY_ADC_ATTEN       ADC_ATTEN_DB_12 // Range up to ~3.3V
 
-// Parámetros de la batería LiPo (3.0V descargada - 4.2V cargada)
-#define BATTERY_MIN_MV         3300             // 3.3V como 0% de seguridad
-#define BATTERY_MAX_MV         4200             // 4.2V como 100%
-#define VOLTAGE_DIVIDER_RATIO  2.0f             // Divisor de voltaje habitual (R1 = R2)
-
-
-int battery_get_percentage(void);
-uint32_t battery_get_voltage_mv(void);
-int battery_update_cache(void);
+// LiPo battery parameters (3.0V discharged - 4.2V charged)
+#define BATTERY_MIN_MV          3300            // 3.3V as 0% safety threshold
+#define BATTERY_MAX_MV          4200            // 4.2V as 100%
+#define VOLTAGE_DIVIDER_RATIO   2.0f            // Standard voltage divider ratio (R1 = R2)
+						//
+esp_err_t battery_get_percentage(int *out_percentage);
+esp_err_t battery_get_voltage_mv(uint32_t *out_voltage_mv);
+esp_err_t battery_update_cache(int *out_percentage);
 
 #ifdef __cplusplus
 }

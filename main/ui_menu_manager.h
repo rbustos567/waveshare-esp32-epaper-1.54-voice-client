@@ -6,6 +6,7 @@
 #include <stddef.h> 
 #include "DEV_Config.h"
 #include "esp_err.h"
+#include "esp_log.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -15,15 +16,15 @@ extern "C" {
 #define ROOT_STACK_DEPTH 0
 
 typedef struct {
-    const char *title;      // Ej: "Set TimeZone"
-    int current_val;        // Valor que está cambiando el usuario temporalmente
-    int min_val;            // Ej: 0
-    int max_val;            // Ej: 100
-    int step;               // Ej: 5
-    const char *unit_suffix;// Ej: "%" o "s"
-    const char* (*get_label)(int val); // <-- Opcional: Para editores basados en listas de texto (Timezone, Timeout, etc.) 
-    void (*on_save)(int val); // Callback que se ejecuta al darle a "Save" (guarda en NVS/RAM)
-    int focus_index; // <-- Guarda qué control está seleccionado (0: +, 1: -, 2: Save, 3: Exit)
+    const char *title;      // Example: "Set TimeZone"
+    int current_val;        // Valua that is changing
+    int min_val;            // Example: 0
+    int max_val;            // Example: 100
+    int step;               // Example: 5
+    const char *unit_suffix;// Example: "%" o "s"
+    const char* (*get_label)(int val); // Optional: For editors based on text lists (Timezone, Timeout, etc)
+    void (*on_save)(int val); // Callback executed when clicking on "Save" (stores values in NVS/RAM)
+    int focus_index; // Saves which control is selected (0: +, 1: -, 2: Save, 3: Exit)
 } ValueEditor;
 
 typedef enum {

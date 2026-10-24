@@ -21,21 +21,18 @@ typedef struct {
     int offset_hours;       // Valor numérico para el editor (-6)
 } tz_option_t;
 
-// Mexico City time
-#define LOCAL_TIME_ZONE "CST6"
-
 #define TZ_INDEX_DEFAULT 2
 #define NUM_TZ_OPTIONS (sizeof(TZ_OPTIONS) / sizeof(tz_option_t))
 
 esp_err_t time_manager_init(void);
 esp_err_t time_manager_sync_sntp(uint32_t timeout_ms);
-void time_manager_set_timezone(const char *tz_string);
-void time_manager_get_local_time(struct tm *timeinfo);
-void time_manager_get_formatted_time(char *buffer, size_t max_len, const char *format);
-void uptime_manager_init(void);
+esp_err_t time_manager_set_timezone(const char *tz_string);
+esp_err_t time_manager_get_local_time(struct tm *timeinfo);
+esp_err_t time_manager_get_formatted_time(char *buffer, size_t max_len, const char *format);
+esp_err_t uptime_manager_init(void);
 void uptime_prepare_for_sleep(void);
 uint32_t uptime_get_seconds(void);
-void uptime_get_formatted(char *buffer, size_t max_len);
+esp_err_t uptime_get_formatted(char *buffer, size_t max_len);
 int get_current_tz_index(void);
 void set_current_tz_index(int idx);
 size_t timezone_get_options_count(void);

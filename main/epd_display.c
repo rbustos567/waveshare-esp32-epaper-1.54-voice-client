@@ -52,5 +52,6 @@ esp_err_t epd_display_init(void) {
 }
 
 uint8_t* epd_display_get_buffer(void) {
+
     return screen_buffer;
 }

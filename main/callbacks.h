@@ -23,10 +23,7 @@
 extern "C" {
 #endif
 
-void action_demo(void);
 void action_record_audio(void);
-void action_listen_audio(void);
-//void action_send_audio(void);
 void return_to_splash_screen(void);
 void action_open_tz_editor(void);
 void action_save_timezone(int selected_index);

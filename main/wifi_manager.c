@@ -15,16 +15,18 @@ static void event_handler(void* arg, esp_event_base_t event_base,
 {
     // Event: Wi-Fi driver started successfully
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
+	ESP_LOGI(TAG, "Wi-Fi station driver started. Initiating connection...");
         esp_wifi_connect();
     } 
     // Event: Disconnected from Access Point or connection attempt failed
     else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
         if (s_retry_num < MAXIMUM_RETRY) {
-            esp_wifi_connect();
             s_retry_num++;
-            ESP_LOGI(TAG, "Retrying connection to AP (%d/%d)...", s_retry_num, MAXIMUM_RETRY);
+	    ESP_LOGW(TAG, "Wi-Fi disconnected. Retrying connection (%d/%d)...", s_retry_num, MAXIMUM_RETRY);
+	    esp_wifi_connect();
         } else {
             // Reached max retries; notify main task via FreeRTOS bit flag
+	    ESP_LOGW(TAG, "Max connection retries (%d) reached. Signaling failure.", MAXIMUM_RETRY);
             xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
         }
     } 
@@ -54,25 +56,51 @@ esp_err_t wifi_system_init(void)
      */
     ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        ESP_ERROR_CHECK(nvs_flash_erase());
+        ESP_LOGW(TAG, "NVS flash full or new version found, erasing and re-initializing...");
+        ret = nvs_flash_erase();
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to erase NVS flash: %s", esp_err_to_name(ret));
+            return ret;
+        }
         ret = nvs_flash_init();
     }
-    ESP_ERROR_CHECK(ret);
 
-    /*
-     * STEP 2: Initialize Underlying TCP/IP Stack & Event Loop
-     * Creates the core netif abstraction layer and default system event loop task.
-     */
-    ESP_ERROR_CHECK(esp_netif_init());
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
-    esp_netif_create_default_wifi_sta();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize NVS flash: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    /* STEP 2: Initialize Underlying TCP/IP Stack & Event Loop */
+    /* Creates the core netif abstraction layer and default system event loop task. */
+    ret = esp_netif_init();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize underlying TCP/IP stack (esp_netif): %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    ret = esp_event_loop_create_default();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to create default system event loop: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    // Creates default Wi-Fi station network interface (Note: esp_netif_create_default_wifi_sta returns a pointer, so we check if it's NULL)
+    esp_netif_t *sta_netif = esp_netif_create_default_wifi_sta();
+    if (sta_netif == NULL) {
+        ESP_LOGE(TAG, "Failed to create default Wi-Fi station network interface");
+        return ESP_FAIL;
+    }
 
     /*
      * STEP 3: Allocate Wi-Fi Driver Control Blocks
      * Initializes internal memory buffers and hardware configuration using default parameters.
      */
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+    ret = esp_wifi_init(&cfg);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize Wi-Fi driver control blocks: %s", esp_err_to_name(ret));
+        return ret;
+    }
 
     ESP_LOGI(TAG, "Wi-Fi system core initialized successfully.");
     return ESP_OK;
@@ -86,6 +114,9 @@ esp_err_t wifi_system_init(void)
  */
 esp_err_t wifi_connect(void) 
 {
+    esp_err_t ret = ESP_OK;
+    esp_event_handler_instance_t instance_any_id = NULL;
+    esp_event_handler_instance_t instance_got_ip = NULL;
     /*
      * STEP 1: Create FreeRTOS Event Group for Synchronization
      * Creates an event group instance to block the caller task until connection events occur.
@@ -97,28 +128,33 @@ esp_err_t wifi_connect(void)
     }
 
     s_retry_num = 0; // Reset retry counter prior to connection attempt
-
     /*
      * STEP 2: Register Event Callbacks
      * Attaches event_handler callback to listen for Wi-Fi lifecycle and IP assignment events.
      */
-    esp_event_handler_instance_t instance_any_id;
-    esp_event_handler_instance_t instance_got_ip;
-
-    ESP_ERROR_CHECK(esp_event_handler_instance_register(
+    ret = esp_event_handler_instance_register(
         WIFI_EVENT,
         ESP_EVENT_ANY_ID,
         &event_handler,
         NULL,
         &instance_any_id
-    ));
-    ESP_ERROR_CHECK(esp_event_handler_instance_register(
+    );
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to register WiFi event handler: %s", esp_err_to_name(ret));
+        goto cleanup;
+    }
+
+    ret = esp_event_handler_instance_register(
         IP_EVENT,
         IP_EVENT_STA_GOT_IP,
         &event_handler,
         NULL,
         &instance_got_ip
-    ));
+    );
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to register IP event handler: %s", esp_err_to_name(ret));
+        goto cleanup;
+    }
 
     /*
      * STEP 3: Configure Target Network Parameters
@@ -138,9 +174,23 @@ esp_err_t wifi_connect(void)
      * Sets mode to Station, loads config, and powers on RF radio.
      * Triggers WIFI_EVENT_STA_START in background which triggers esp_wifi_connect().
      */
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
-    ESP_ERROR_CHECK(esp_wifi_start());
+    ret = esp_wifi_set_mode(WIFI_MODE_STA);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to set Wi-Fi mode: %s", esp_err_to_name(ret));
+        goto cleanup;
+    }
+
+    ret = esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to set Wi-Fi config: %s", esp_err_to_name(ret));
+        goto cleanup;
+    }
+
+    ret = esp_wifi_start();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to start Wi-Fi: %s", esp_err_to_name(ret));
+        goto cleanup;
+    }
 
     ESP_LOGI(TAG, "Starting connection to SSID: %s...", WIFI_SSID);
 
@@ -157,42 +207,50 @@ esp_err_t wifi_connect(void)
         pdMS_TO_TICKS(WIFI_TIMEOUT_MS)
     );
 
-    esp_err_t result = ESP_FAIL;
-
     /*
      * STEP 6: Connection Result Evaluation
      */
     if (bits & WIFI_CONNECTED_BIT) {
         ESP_LOGI(TAG, "Wi-Fi Connection established.");
-        result = ESP_OK;
+        ret = ESP_OK;
     } else if (bits & WIFI_FAIL_BIT) {
-        ESP_LOGE(TAG, "Failed to connect to SSID: %s after %d tries.", WIFI_SSID, MAXIMUM_RETRY);
-        result = ESP_FAIL;
+        ESP_LOGW(TAG, "Failed to connect to SSID: %s after %d tries.", WIFI_SSID, MAXIMUM_RETRY);
+        ret = ESP_FAIL;
     } else {
-        ESP_LOGE(TAG, "Timeout reached (%d ms) waiting Wi-Fi connection.", WIFI_TIMEOUT_MS);
-        result = ESP_ERR_TIMEOUT;
+        ESP_LOGW(TAG, "Timeout reached (%d ms) waiting Wi-Fi connection.", WIFI_TIMEOUT_MS);
+        ret = ESP_ERR_TIMEOUT;
     }
 
-    /*
-     * STEP 7: Cleanup Callbacks and Event Group
-     * Unregisters temporary listeners and frees Event Group RAM allocation.
-     */
-    ESP_ERROR_CHECK(esp_event_handler_instance_unregister(IP_EVENT, IP_EVENT_STA_GOT_IP, instance_got_ip));
-    ESP_ERROR_CHECK(esp_event_handler_instance_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, instance_any_id));
-    vEventGroupDelete(s_wifi_event_group);
+cleanup:
+    /* STEP 7: Cleanup Callbacks and Event Group */
+    /* Unregisters temporary listeners and frees Event Group RAM allocation. */
+    if (instance_got_ip != NULL) {
+        esp_event_handler_instance_unregister(IP_EVENT, IP_EVENT_STA_GOT_IP, instance_got_ip);
+    }
+    if (instance_any_id != NULL) {
+        esp_event_handler_instance_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, instance_any_id);
+    }
+    if (s_wifi_event_group != NULL) {
+        vEventGroupDelete(s_wifi_event_group);
+        s_wifi_event_group = NULL;
+    }
 
-    return result;
+    return ret;
 }
-
 /**
  * @brief Disconnects and stops the Wi-Fi RF radio to save power.
  */
 esp_err_t wifi_disconnect(void)
 {
+    esp_err_t ret = ESP_OK;
+
     ESP_LOGI(TAG, "Stopping Wi-Fi interface...");
-    esp_err_t err = esp_wifi_stop();
-    if (err == ESP_OK) {
+    ret = esp_wifi_stop();
+    if (ret == ESP_OK) {
         ESP_LOGI(TAG, "Wi-Fi stopped successfully.");
+    } else {
+        ESP_LOGE(TAG, "Failed to stop Wi-fi.");
     }
-    return err;
+
+    return ret;
 }
