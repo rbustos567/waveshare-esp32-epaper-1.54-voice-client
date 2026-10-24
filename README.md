@@ -23,7 +23,7 @@ Firmware for the Waveshare ESP32-S3 e-Paper 1.54" development board, designed fo
 
 Ensure you have the official ESP-IDF (v5.x recommended) framework installed and configured on your development machine.
 
-1. Install ESP-IDF prerequisites following the Espressif Documentation.
+1. Install ESP-IDF prerequisites following the [Espressif Documentation](https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/get-started/index.html).
 2. Set up the environment variables:
 ```bash
 . $HOME/esp/esp-idf/export.sh
