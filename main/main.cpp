@@ -73,6 +73,22 @@ extern "C" void app_main(void) {
     if (ret != ESP_OK) {
         ESP_LOGW(TAG, "Time manager initialization warning: %s", esp_err_to_name(ret));
     }
+    /* Always try to synchronize Network Clock (NTP/SNTP) to mitigate
+     * internal RC oscillator drift and thermal variance across wakeups. */
+    ret = wifi_system_init();
+    if (ret == ESP_OK) {
+        if (wifi_connect() == ESP_OK) {
+            ret = time_manager_sync_sntp(5000);
+            if (ret != ESP_OK) {
+                ESP_LOGW(TAG, "SNTP time synchronization failed: %s", esp_err_to_name(ret));
+            }
+            wifi_disconnect();
+        } else {
+            ESP_LOGW(TAG, "Failed to connect to Wi-Fi for NTP synchronization during boot");
+        }
+    } else {
+        ESP_LOGW(TAG, "Wi-Fi system initialization failed: %s", esp_err_to_name(ret));
+    }
 
     ret = uptime_manager_init();
     if (ret != ESP_OK) {
@@ -103,22 +119,6 @@ extern "C" void app_main(void) {
         /* FIRST COLD BOOT (Power-On / Reset Button / Cable Plugged) */
         /* ======================================================= */
         ESP_LOGI(TAG, "System booted normally (Power-on Reset / Soft Reset).");
-
-	/* a) Synchronize Network Clock (NTP/SNTP) */
-	ret = wifi_system_init();
-        if (ret == ESP_OK) {
-            if (wifi_connect() == ESP_OK) {
-                ret = time_manager_sync_sntp(5000);
-		if (ret != ESP_OK) {
-                    ESP_LOGW(TAG, "SNTP time synchronization failed: %s", esp_err_to_name(ret));
-                }
-                wifi_disconnect();
-            } else {
-                ESP_LOGW(TAG, "Failed to connect to Wi-Fi for NTP synchronization during boot");
-            }
-        } else {
-            ESP_LOGW(TAG, "Wi-Fi system initialization failed: %s", esp_err_to_name(ret));
-        }
 
     } else if (wakeup_reason == ESP_SLEEP_WAKEUP_EXT0) {
 	/* ======================================================= */
