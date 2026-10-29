@@ -36,7 +36,7 @@ extern "C" {
 #define UI_MENU_STATUS_T_STR   "STATUS:"
 #define UI_REC_STATUS_T_STR    "STATUS:"
 #define UI_REC_2_CLK_STR       "2-Click: Rec/Stop"
-#define UI_REC_1_CLK_STR       "1-Click: Ext"
+#define UI_REC_1_CLK_STR       "1-Click: Exit"
 
 esp_err_t render(const char *st_msg, const char *output);
 esp_err_t render_full(const char *status_msg, const char *output_msg);
