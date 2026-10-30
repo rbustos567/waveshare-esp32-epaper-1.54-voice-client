@@ -75,10 +75,9 @@ esp_err_t battery_get_voltage_mv(uint32_t *out_voltage_mv) {
 
     // Take multiple samples to obtain average and reduce noise
     int raw_sum = 0;
-    const int samples = 8;
     int raw = 0;
 
-    for (int i = 0; i < samples; i++) {
+    for (int i = 0; i < BATTERY_SAMPLES; i++) {
         ret = adc_oneshot_read(s_adc1_handle, BATTERY_ADC_CHANNEL, &raw);
         if (ret != ESP_OK) {
             return ret;
