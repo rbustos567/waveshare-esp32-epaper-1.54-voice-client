@@ -21,7 +21,10 @@ extern "C" {
 #define MAX_AUDIO_BUF_SIZE  (30 * 16000 * 2) // Buffer size for aprox. 30 sec of recording
 
 // IMPORTANT: Need to add here your server ip address
-#define API_C_SERVER_URL      "http://<YOUR SERVER IP ADDRESS>:8000/process-audio"
+//#define API_C_SERVER_URL      "http://<YOUR SERVER IP ADDRESS>:8000/process-audio"
+//#define API_C_SERVER_URL      "https://orangepi6plus-1.tail6a8895.ts.net/process-audio" 
+#define API_C_SERVER_URL      "http://192.168.1.36:8000/process-audio"
+
 #define API_C_SERVER_TIMEOUT  30000
 
 #define API_C_SERVER_KEY         "API-Key"      

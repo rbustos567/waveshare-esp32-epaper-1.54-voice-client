@@ -2,6 +2,15 @@
 
 static const char *TAG = "WIFI_MANAGER";
 
+// RTC storage block that survives Deep Sleep and feeds both the UI menu and connection logic
+RTC_DATA_ATTR struct {
+    wifi_credential_t profiles[MAX_WIFI_PROFILES]; // Array of all stored Wi-Fi networks
+    int32_t count;                               // Total number of valid profiles loaded
+    int32_t active_index;                        // Index of the currently selected network for connection
+    bool is_initialized;                         // Flag to check if RTC cache is ready
+} rtc_wifi_storage = { .active_index = 0, .is_initialized = false };
+
+
 // FreeRTOS event group handle to signal when connected or failed
 static EventGroupHandle_t s_wifi_event_group;
 static int s_retry_num = 0;
@@ -159,15 +168,29 @@ esp_err_t wifi_connect(void)
     /*
      * STEP 3: Configure Target Network Parameters
      */
+    char current_ssid[32];
+    char current_pass[64];
+
+    // Fetch active credentials instantly from RTC RAM (zero NVS wear)
+    ret = wifi_get_active_credentials(current_ssid, sizeof(current_ssid), 
+                                                current_pass, sizeof(current_pass));
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to retrieve active Wi-Fi credentials!");
+        // Handle error accordingly (e.g., return or fallback)
+	return ret;
+    }
+
     wifi_config_t wifi_config = {
         .sta = {
-            .ssid = WIFI_SSID,
-            .password = WIFI_PASS,
             .threshold = {
                 .authmode = WIFI_AUTH_WPA2_PSK,
             },
         },
     };
+
+    // Safely copy the variables into the ESP-IDF Wi-Fi configuration structure
+    strlcpy((char *)wifi_config.sta.ssid, current_ssid, sizeof(wifi_config.sta.ssid));
+    strlcpy((char *)wifi_config.sta.password, current_pass, sizeof(wifi_config.sta.password));
 
     /*
      * STEP 4: Start Wi-Fi Radio Interface
@@ -192,7 +215,7 @@ esp_err_t wifi_connect(void)
         goto cleanup;
     }
 
-    ESP_LOGI(TAG, "Starting connection to SSID: %s...", WIFI_SSID);
+    ESP_LOGI(TAG, "Starting connection to SSID: %s...", current_ssid);
 
     /*
      * STEP 5: Synchronous Wait (Block Task Execution)
@@ -214,7 +237,7 @@ esp_err_t wifi_connect(void)
         ESP_LOGI(TAG, "Wi-Fi Connection established.");
         ret = ESP_OK;
     } else if (bits & WIFI_FAIL_BIT) {
-        ESP_LOGW(TAG, "Failed to connect to SSID: %s after %d tries.", WIFI_SSID, MAXIMUM_RETRY);
+        ESP_LOGW(TAG, "Failed to connect to SSID: %s after %d tries.", current_ssid, MAXIMUM_RETRY);
         ret = ESP_FAIL;
     } else {
         ESP_LOGW(TAG, "Timeout reached (%d ms) waiting Wi-Fi connection.", WIFI_TIMEOUT_MS);
@@ -251,6 +274,242 @@ esp_err_t wifi_disconnect(void)
     } else {
         ESP_LOGE(TAG, "Failed to stop Wi-fi.");
     }
+
+    return ret;
+}
+
+/**
+ * @brief Automatically synchronizes Wi-Fi credentials from headers to NVS.
+ *        It checks if the network count or any SSID/password has changed.
+ *        If a change is detected, it clears old records and updates them.
+ */
+esp_err_t wifi_sync_credentials_nvs_automatically(void) {
+    esp_err_t ret = ESP_OK;
+    nvs_handle_t nvs_h;
+    
+    // Open the NVS "storage" namespace in read/write mode
+    if (nvs_open("storage", NVS_READWRITE, &nvs_h) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to open NVS 'storage' namespace");
+        return ESP_FAIL;
+    }
+
+    bool needs_update = false;
+    int32_t stored_count = -1;
+
+    // 1. Check if the stored network count matches the current defines count
+    if (nvs_get_i32(nvs_h, "wifi_count", &stored_count) != ESP_OK || stored_count != INITIAL_WIFI_COUNT) {
+        needs_update = true;
+    } else {
+        // 2. If count matches, verify profile by profile using a temporary struct array
+        struct {
+            const char *ssid;
+            const char *pass;
+        } current_networks[INITIAL_WIFI_COUNT] = {
+            {INITIAL_WIFI_SSID_0, INITIAL_WIFI_PASS_0},
+            #if INITIAL_WIFI_COUNT > 1
+            {INITIAL_WIFI_SSID_1, INITIAL_WIFI_PASS_1}
+            #endif
+            // Add more profiles here if your defines expand in the future
+        };
+
+        for (int i = 0; i < INITIAL_WIFI_COUNT; i++) {
+            char k_ssid[16], k_pass[16];
+            snprintf(k_ssid, sizeof(k_ssid), "wifi_ssid_%d", i);
+            snprintf(k_pass, sizeof(k_pass), "wifi_pass_%d", i);
+
+            char stored_ssid[32] = {0};
+            char stored_pass[64] = {0};
+            size_t len_ssid = sizeof(stored_ssid);
+            size_t len_pass = sizeof(stored_pass);
+
+            // Read currently stored values from NVS
+            esp_err_t err_s = nvs_get_str(nvs_h, k_ssid, stored_ssid, &len_ssid);
+            esp_err_t err_p = nvs_get_str(nvs_h, k_pass, stored_pass, &len_pass);
+
+            // If reading fails or text doesn't match the defines, an update is required
+            if (err_s != ESP_OK || err_p != ESP_OK || 
+                strcmp(stored_ssid, current_networks[i].ssid) != 0 || 
+                strcmp(stored_pass, current_networks[i].pass) != 0) {
+                needs_update = true;
+                break; // Exit early as soon as one difference is found
+            }
+        }
+    }
+
+    // 3. If any change was detected, clean up old keys and rewrite with new defines
+    if (needs_update) {
+        ESP_LOGI(TAG, "Changes detected in Wi-Fi defines! Synchronizing NVS...");
+
+        // Erase old profiles if they previously existed to prevent leftover data
+        if (stored_count > 0) {
+            for (int i = 0; i < stored_count; i++) {
+                char k_ssid[16], k_pass[16];
+                snprintf(k_ssid, sizeof(k_ssid), "wifi_ssid_%d", i);
+                snprintf(k_pass, sizeof(k_pass), "wifi_pass_%d", i);
+                esp_err_t err_es = nvs_erase_key(nvs_h, k_ssid);
+		// nvs_erase_key returns esp_err_t, which can be ignored if its NOT_FOUND
+		// However, it is useful to validate if occurs a critical hardware/flash error 
+		if (err_es != ESP_OK && err_es != ESP_ERR_NVS_NOT_FOUND) {
+                    ESP_LOGW(TAG, "Warning: failed to erase %s: %s", k_ssid, esp_err_to_name(err_es));
+                }
+
+                esp_err_t err_ep = nvs_erase_key(nvs_h, k_pass);
+		if (err_ep != ESP_OK && err_ep != ESP_ERR_NVS_NOT_FOUND) {
+                    ESP_LOGW(TAG, "Warning: failed to erase %s: %s", k_pass, esp_err_to_name(err_ep));
+                }
+            }
+        }
+
+        // Save the new network count
+        ret = nvs_set_i32(nvs_h, "wifi_count", INITIAL_WIFI_COUNT);
+        if (ret != ESP_OK) {
+	    ESP_LOGE(TAG, "Failed to set NVS count using key 'wifi_count' in 'storage' namespace");
+            nvs_close(nvs_h);
+            return ret;
+        }   
+
+        // Populate the structured array with current defines
+        struct {
+            const char *ssid;
+            const char *pass;
+        } net_list[INITIAL_WIFI_COUNT] = {
+            {INITIAL_WIFI_SSID_0, INITIAL_WIFI_PASS_0},
+            #if INITIAL_WIFI_COUNT > 1
+            {INITIAL_WIFI_SSID_1, INITIAL_WIFI_PASS_1}
+            #endif
+        };
+
+        // Iteratively save all credentials cleanly using a loop
+        for (int i = 0; i < INITIAL_WIFI_COUNT; i++) {
+            char k_ssid[16], k_pass[16];
+            snprintf(k_ssid, sizeof(k_ssid), "wifi_ssid_%d", i);
+            snprintf(k_pass, sizeof(k_pass), "wifi_pass_%d", i);
+
+            ret = nvs_set_str(nvs_h, k_ssid, net_list[i].ssid);
+	    if (ret != ESP_OK) {
+		ESP_LOGE(TAG, "Failed to write %s to NVS: %s", k_ssid, esp_err_to_name(ret));
+                nvs_close(nvs_h);
+		return ret;
+	    }
+
+            ret = nvs_set_str(nvs_h, k_pass, net_list[i].pass);
+	    if (ret != ESP_OK) {
+		ESP_LOGE(TAG, "Failed to write %s to NVS: %s", k_pass, esp_err_to_name(ret));
+                nvs_close(nvs_h);
+                return ret;
+            }
+
+        }
+
+        // Commit changes permanently to flash storage
+        ret = nvs_commit(nvs_h);
+	if (ret != ESP_OK) {
+	    ESP_LOGE(TAG, "Failed to commit NVS changes: %s", esp_err_to_name(ret));
+	    nvs_close(nvs_h);
+	    return ret;
+	} else {
+            ESP_LOGI(TAG, "NVS successfully synchronized with new Wi-Fi credentials!");
+	}
+    } else {
+        ESP_LOGI(TAG, "No changes in Wi-Fi defines. Using existing NVS data.");
+    }
+
+    // Close the NVS handle
+    nvs_close(nvs_h);
+
+    return ret;
+}
+
+/**
+ * @brief Initializes the RTC cache by reading all Wi-Fi profiles from NVS.
+ *        To be called once during cold boot / system startup.
+ */
+esp_err_t wifi_rtc_cache_init(void) {
+    esp_err_t ret = ESP_OK;
+
+    nvs_handle_t nvs_h;
+    ret = nvs_open("storage", NVS_READONLY, &nvs_h);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to open NVS 'storage' for reading: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    // Read the total network count stored in NVS
+    int32_t stored_count = 0;
+    ret = nvs_get_i32(nvs_h, "wifi_count", &stored_count);
+    if (ret != ESP_OK || stored_count <= 0) {
+        ESP_LOGW(TAG, "No valid Wi-Fi count found in NVS");
+        nvs_close(nvs_h);
+        return (ret != ESP_OK) ? ret : ESP_ERR_NVS_NOT_FOUND;
+    }
+
+    // Prevent overflow if NVS count exceeds our maximum array limit
+    if (stored_count > MAX_WIFI_PROFILES) {
+        stored_count = MAX_WIFI_PROFILES;
+    }
+
+    rtc_wifi_storage.count = stored_count;
+
+    // Iteratively load all SSID and password pairs from NVS into the RTC array
+    for (int i = 0; i < stored_count; i++) {
+        char k_ssid[16], k_pass[16];
+        snprintf(k_ssid, sizeof(k_ssid), "wifi_ssid_%d", i);
+        snprintf(k_pass, sizeof(k_pass), "wifi_pass_%d", i);
+
+        size_t len_s = sizeof(rtc_wifi_storage.profiles[i].ssid);
+        size_t len_p = sizeof(rtc_wifi_storage.profiles[i].pass);
+
+        esp_err_t err_s = nvs_get_str(nvs_h, k_ssid, rtc_wifi_storage.profiles[i].ssid, &len_s);
+	if (err_s != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to read %s from NVS: %s", k_ssid, esp_err_to_name(err_s));
+            nvs_close(nvs_h);
+            return err_s;
+        }
+
+        esp_err_t err_p = nvs_get_str(nvs_h, k_pass, rtc_wifi_storage.profiles[i].pass, &len_p);
+	if (err_p != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to read %s from NVS: %s", k_pass, esp_err_to_name(err_p));
+            nvs_close(nvs_h);
+            return err_p;
+        }
+    }
+
+    nvs_close(nvs_h);
+
+    // Ensure active_index is within safe bounds (default to 0 on first boot)
+    if (rtc_wifi_storage.active_index < 0 || rtc_wifi_storage.active_index >= rtc_wifi_storage.count) {
+        ESP_LOGW(TAG, "Active index (%ld) out of bounds or uninitialized. Resetting to 0.", (long)rtc_wifi_storage.active_index);    
+        rtc_wifi_storage.active_index = 0;
+    }
+
+    rtc_wifi_storage.is_initialized = true;
+
+    ESP_LOGI(TAG, "RTC cache successfully initialized with %ld profiles. Active index: %ld",
+             (long)rtc_wifi_storage.count, (long)rtc_wifi_storage.active_index);
+
+    return ret;
+}
+
+/**
+ * @brief Instantly retrieves the active Wi-Fi credentials from RTC RAM.
+ *        Zero NVS overhead, ideal for deep sleep wake-ups and on-demand connections.
+ */
+esp_err_t wifi_get_active_credentials(char *out_ssid, size_t ssid_len, char *out_pass, size_t pass_len) {
+    esp_err_t ret = ESP_OK;
+
+    if (!rtc_wifi_storage.is_initialized) {
+        ESP_LOGW(TAG, "RTC cache is not initialized! Call wifi_rtc_cache_init() first.");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    int32_t active = rtc_wifi_storage.active_index;
+    if (active < 0 || active >= rtc_wifi_storage.count) {
+        ESP_LOGE(TAG, "Active Wi-Fi index out of bounds: %ld", (long)active);
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    strlcpy(out_ssid, rtc_wifi_storage.profiles[active].ssid, ssid_len);
+    strlcpy(out_pass, rtc_wifi_storage.profiles[active].pass, pass_len);
 
     return ret;
 }
