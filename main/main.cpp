@@ -95,10 +95,9 @@ extern "C" void app_main(void) {
         ESP_LOGW(TAG, "Uptime manager initialization warning: %s", esp_err_to_name(ret));
     }
 
-    int battery_pct = 0;
-    ret = battery_update_cache(&battery_pct);
+    ret = battery_manager_init();
     if (ret != ESP_OK) {
-        ESP_LOGW(TAG, "Initial battery measurement failed: %s", esp_err_to_name(ret));
+        ESP_LOGW(TAG, "Initialization of battery measurement failed: %s", esp_err_to_name(ret));
     }
 
     ret = power_manager_init();

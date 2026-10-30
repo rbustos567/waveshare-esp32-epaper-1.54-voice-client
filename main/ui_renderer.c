@@ -66,6 +66,10 @@ esp_err_t render_splash_to_buffer(const char *status_msg) {
 
     /* 2. Battery in Top-Right Corner */
     int battery_pct = 0;
+    ret = battery_update_cache(&battery_pct);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Failed after calling battery_update_cache() : %s", esp_err_to_name(ret));
+    }
     if (battery_get_percentage(&battery_pct) == ESP_OK) {
         render_draw_battery_icon_top_right(battery_pct);
     } else {
@@ -106,6 +110,13 @@ esp_err_t render_splash_to_buffer(const char *status_msg) {
     if (uptime_get_formatted(uptime_str, sizeof(uptime_str)) == ESP_OK) {
         Paint_DrawString_EN(12, 132, uptime_str, UI_MENU_SYS_UPTIME_FONT, BLACK, WHITE);
     }
+
+    /* Battery diagnostic info */
+    //char battery_debug_str[48];
+    //snprintf(battery_debug_str, sizeof(battery_debug_str), "Bat mV: %lu | Raw: %d",
+    //         (unsigned long)battery_get_last_voltage_mv(),
+    //         battery_get_last_raw_avg());
+    //Paint_DrawString_EN(12, 152, battery_debug_str, UI_MENU_DATE_FONT, BLACK, WHITE);
 
     /* System general status */
     Paint_DrawString_EN(12, 172, UI_MENU_STATUS_T_STR, UI_MENU_STATUS_FONT, BLACK, WHITE);
