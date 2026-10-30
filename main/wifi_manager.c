@@ -529,7 +529,7 @@ esp_err_t wifi_get_active_pass(char *out_pass, size_t pass_len) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    strlcpy(out_pass, rtc_wifi_storage.profiles[active].ssid, pass_len);
+    strlcpy(out_pass, rtc_wifi_storage.profiles[active].pass, pass_len);
 
     return ret;
 }
