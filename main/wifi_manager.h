@@ -36,7 +36,8 @@ esp_err_t wifi_connect(void);
 esp_err_t wifi_disconnect(void);
 esp_err_t wifi_sync_credentials_nvs_automatically(void);
 esp_err_t wifi_rtc_cache_init(void);
-esp_err_t wifi_get_active_credentials(char *out_ssid, size_t ssid_len, char *out_pass, size_t pass_len);
+esp_err_t wifi_get_active_ssid(char *out_ssid, size_t ssid_len);
+esp_err_t wifi_get_active_pass(char *out_pass, size_t pass_len);
 
 #ifdef __cplusplus
 }

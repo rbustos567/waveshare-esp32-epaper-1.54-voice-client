@@ -172,12 +172,18 @@ esp_err_t wifi_connect(void)
     char current_pass[64];
 
     // Fetch active credentials instantly from RTC RAM (zero NVS wear)
-    ret = wifi_get_active_credentials(current_ssid, sizeof(current_ssid), 
-                                                current_pass, sizeof(current_pass));
+    ret = wifi_get_active_ssid(current_ssid, sizeof(current_ssid));
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to retrieve active Wi-Fi credentials!");
+        ESP_LOGE(TAG, "Failed to retrieve active Wi-Fi SSID!");
         // Handle error accordingly (e.g., return or fallback)
 	return ret;
+    }
+
+    ret = wifi_get_active_pass(current_pass, sizeof(current_pass));
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to retrieve active Wi-Fi Password!");
+        // Handle error accordingly (e.g., return or fallback)
+        return ret;
     }
 
     wifi_config_t wifi_config = {
@@ -490,11 +496,7 @@ esp_err_t wifi_rtc_cache_init(void) {
     return ret;
 }
 
-/**
- * @brief Instantly retrieves the active Wi-Fi credentials from RTC RAM.
- *        Zero NVS overhead, ideal for deep sleep wake-ups and on-demand connections.
- */
-esp_err_t wifi_get_active_credentials(char *out_ssid, size_t ssid_len, char *out_pass, size_t pass_len) {
+esp_err_t wifi_get_active_ssid(char *out_ssid, size_t ssid_len) {
     esp_err_t ret = ESP_OK;
 
     if (!rtc_wifi_storage.is_initialized) {
@@ -509,7 +511,25 @@ esp_err_t wifi_get_active_credentials(char *out_ssid, size_t ssid_len, char *out
     }
 
     strlcpy(out_ssid, rtc_wifi_storage.profiles[active].ssid, ssid_len);
-    strlcpy(out_pass, rtc_wifi_storage.profiles[active].pass, pass_len);
+
+    return ret;
+}
+
+esp_err_t wifi_get_active_pass(char *out_pass, size_t pass_len) {
+    esp_err_t ret = ESP_OK;
+
+    if (!rtc_wifi_storage.is_initialized) {
+        ESP_LOGW(TAG, "RTC cache is not initialized! Call wifi_rtc_cache_init() first.");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    int32_t active = rtc_wifi_storage.active_index;
+    if (active < 0 || active >= rtc_wifi_storage.count) {
+        ESP_LOGE(TAG, "Active Wi-Fi index out of bounds: %ld", (long)active);
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    strlcpy(out_pass, rtc_wifi_storage.profiles[active].ssid, pass_len);
 
     return ret;
 }
