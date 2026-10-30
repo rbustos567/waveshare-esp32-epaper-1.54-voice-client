@@ -85,7 +85,7 @@ esp_err_t battery_get_voltage_mv(uint32_t *out_voltage_mv) {
         raw_sum += raw;
     }
 
-    s_last_raw_avg = raw_sum / samples;
+    s_last_raw_avg = raw_sum / BATTERY_SAMPLES;
     int voltage_adc_mv = 0;
 
     // Official conversion using Espressif calibration
