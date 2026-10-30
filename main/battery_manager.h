@@ -23,6 +23,7 @@ extern "C" {
 #define BATTERY_MIN_MV          3300UL            // 3.3V as 0% safety threshold
 #define BATTERY_MAX_MV          4200UL            // 4.2V as 100%
 #define VOLTAGE_DIVIDER_RATIO   2.0f            // Standard voltage divider ratio (R1 = R2)
+#define BATTERY_SAMPLES         32
 
 esp_err_t battery_manager_init(void);
 esp_err_t battery_get_percentage(int *out_percentage);
