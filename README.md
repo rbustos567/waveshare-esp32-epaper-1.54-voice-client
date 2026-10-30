@@ -32,10 +32,15 @@ Ensure you have the official ESP-IDF (v5.x recommended) framework installed and 
 ## Configuration (menuconfig & Source Defines)
 Before compiling, you need to configure your network credentials and server endpoint:
 
-1. Open main/wifi_manager.h and define your Wi-Fi SSID and password:
+1. Open main/wifi_config.h and define your Wi-Fi SSID and password. By default, you can provide two sets of SSID/password. If you only provide one, do not forget to set INITIAL_WIFI_COUNT to 1. The first will be the default one.
 ```bash
-#define WIFI_SSID           "<Your Wifi SSID>"
-#define WIFI_PASS           "<Your Wifi Password>"
+#define INITIAL_WIFI_COUNT      2
+
+#define INITIAL_WIFI_SSID_0 "YourHome"
+#define INITIAL_WIFI_PASS_0 "YourHomePass"
+
+#define INITIAL_WIFI_SSID_1 "YourMobile"
+#define INITIAL_WIFI_PASS_2 "YourMobilePass"
 ```
 2. Open main/api_client.h and configure your backend server IP address and endpoint:
 ```bash
