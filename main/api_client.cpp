@@ -56,8 +56,10 @@ esp_err_t api_client_send_audio(char *out_msg, size_t max_len) {
         if (out_msg) 
 	    snprintf(out_msg, max_len, "WiFi Connection Failed");
 
+	wifi_disconnect();
+
         return ESP_FAIL;
-    }
+    } 
 
     /* 1. Get data from audio_manager */
     uint8_t *audio_data = audio_manager_get_audio_ptr();

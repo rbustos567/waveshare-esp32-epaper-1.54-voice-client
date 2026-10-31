@@ -205,6 +205,14 @@ void action_save_sleep_timeout(int selected_index)
 }
 
 /**
+ * @brief Saves the selected wifi ssid index.
+ */
+void action_save_wifi_selection(int index) {
+    wifi_manager_set_active_index(index);
+    ESP_LOGI(TAG, "Wifi SSID index saved: %d", index);
+}
+
+/**
  * @brief Opens the sleep timeout configuration editor UI.
  */
 void action_open_sleep_timeout_editor(void)
@@ -222,6 +230,31 @@ void action_open_sleep_timeout_editor(void)
     set_menu_active_editor_unit_suffix(""); /* Optional, labels already include units */
     set_menu_active_editor_get_label(get_timeout_label_wrapper);
     set_menu_active_editor_on_save(action_save_sleep_timeout);
+    set_menu_active_editor_focus_index(EDITOR_FOCUS_PLUS);
+    set_current_ui_state(UI_STATE_EDIT_VALUE);
+    render_full(NULL, NULL);
+}
+
+/**
+ * @brief Opens the Choose Network configuration editor UI. 
+ */
+void action_open_choose_network_editor(void)
+{
+    set_menu_active_editor_title("Choose Network");
+
+    int current_index = wifi_manager_get_active_index();
+    set_menu_active_editor_current_val(current_index);
+    set_menu_active_editor_min_val(0);
+
+    int max_val = wifi_manager_get_profiles_count() - 1;
+    if (max_val < 0) 
+        max_val = 0; // Fallback
+    set_menu_active_editor_max_val(max_val);
+
+    set_menu_active_editor_step(1);
+    set_menu_active_editor_unit_suffix(""); /* Optional, labels already include units */
+    set_menu_active_editor_get_label(wifi_label_wrapper);
+    set_menu_active_editor_on_save(action_save_wifi_selection);
     set_menu_active_editor_focus_index(EDITOR_FOCUS_PLUS);
     set_current_ui_state(UI_STATE_EDIT_VALUE);
     render_full(NULL, NULL);

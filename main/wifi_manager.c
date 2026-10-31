@@ -198,6 +198,8 @@ esp_err_t wifi_connect(void)
     strlcpy((char *)wifi_config.sta.ssid, current_ssid, sizeof(wifi_config.sta.ssid));
     strlcpy((char *)wifi_config.sta.password, current_pass, sizeof(wifi_config.sta.password));
 
+    ESP_LOGI(TAG, "Configured Wi-Fi struct with SSID: %s", wifi_config.sta.ssid);
+    ESP_LOGI(TAG, "Configured Wi-Fi struct with Pass: %s", wifi_config.sta.password);
     /*
      * STEP 4: Start Wi-Fi Radio Interface
      * Sets mode to Station, loads config, and powers on RF radio.
@@ -231,7 +233,7 @@ esp_err_t wifi_connect(void)
     EventBits_t bits = xEventGroupWaitBits(
         s_wifi_event_group,
         WIFI_CONNECTED_BIT | WIFI_FAIL_BIT,
-        pdFALSE, // Do not clear bits on exit
+	pdFALSE, // Do not clear bits on exit
         pdFALSE, // Logical OR condition (unblock if either bit is set)
         pdMS_TO_TICKS(WIFI_TIMEOUT_MS)
     );
@@ -532,4 +534,36 @@ esp_err_t wifi_get_active_pass(char *out_pass, size_t pass_len) {
     strlcpy(out_pass, rtc_wifi_storage.profiles[active].pass, pass_len);
 
     return ret;
+}
+
+const char* wifi_label_wrapper(int index) {
+    
+    return wifi_manager_get_ssid_at(index);
+}
+
+int wifi_manager_get_active_index(void) {
+    
+    return (int)rtc_wifi_storage.active_index;
+}
+
+int wifi_manager_get_profiles_count(void) {
+
+    return (int)rtc_wifi_storage.count;
+}
+
+const char* wifi_manager_get_ssid_at(int index) {
+    
+    if (index >= 0 && index < rtc_wifi_storage.count) {
+        return rtc_wifi_storage.profiles[index].ssid;
+    }
+
+    return "";
+}
+
+void wifi_manager_set_active_index(int index) {
+    
+    if (index >= 0 && index < rtc_wifi_storage.count) {
+        rtc_wifi_storage.active_index = index;
+        ESP_LOGI(TAG, "Active Wi-Fi profile changed to index %d (%s)", index, rtc_wifi_storage.profiles[index].ssid);
+    }
 }

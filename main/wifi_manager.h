@@ -38,6 +38,11 @@ esp_err_t wifi_sync_credentials_nvs_automatically(void);
 esp_err_t wifi_rtc_cache_init(void);
 esp_err_t wifi_get_active_ssid(char *out_ssid, size_t ssid_len);
 esp_err_t wifi_get_active_pass(char *out_pass, size_t pass_len);
+const char* wifi_label_wrapper(int index);
+int wifi_manager_get_active_index(void);
+int wifi_manager_get_profiles_count(void);
+const char* wifi_manager_get_ssid_at(int index);
+void wifi_manager_set_active_index(int index);
 
 #ifdef __cplusplus
 }
