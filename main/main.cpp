@@ -107,6 +107,16 @@ extern "C" void app_main(void) {
             ESP_LOGW(TAG, "Wifi RTC caching failed : %s", esp_err_to_name(ret));
         }
 
+        ret = server_sync_config_nvs_automatically();
+        if (ret != ESP_OK) {
+            ESP_LOGW(TAG, "Servers sync failed : %s", esp_err_to_name(ret));
+        }
+
+	ret = server_rtc_cache_init();
+	if (ret != ESP_OK) {
+            ESP_LOGW(TAG, "Servers RTC caching failed : %s", esp_err_to_name(ret));
+        }
+
     } else if (wakeup_reason == ESP_SLEEP_WAKEUP_EXT0) {
 	/* ======================================================= */
         /* WAKE UP FROM DEEP SLEEP (BOOT Button Pressed)           */

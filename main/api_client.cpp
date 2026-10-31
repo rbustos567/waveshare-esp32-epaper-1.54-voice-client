@@ -84,8 +84,18 @@ esp_err_t api_client_send_audio(char *out_msg, size_t max_len) {
     ESP_LOGI(TAG, "Sending %u bytes of audio via HTTP...", (unsigned int)audio_size);
 
     /* 2. Configure HTTP */
+    char server_url[64];
+
+    // Fetch active server url instantly from RTC RAM (zero NVS wear)
+    ret = server_get_active_url(server_url, sizeof(server_url));
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to retrieve active server URL!");
+        // Handle error accordingly (e.g., return or fallback)
+        return ret;
+    }
+
     esp_http_client_config_t config = {};
-    config.url = API_C_SERVER_URL;
+    config.url = server_url;
     config.method = HTTP_METHOD_POST;
     config.timeout_ms = API_C_SERVER_TIMEOUT;
     config.crt_bundle_attach = esp_crt_bundle_attach;
@@ -344,5 +354,22 @@ esp_err_t server_rtc_cache_init(void) {
     ESP_LOGI(TAG, "RTC server cache successfully initialized with %ld profiles. Active index: %ld",
              (long)rtc_server_storage.count, (long)rtc_server_storage.active_index);
 
+    return ret;
+}
+
+esp_err_t server_get_active_url(char *out_url, size_t max_len) {
+    esp_err_t ret = ESP_OK;
+
+    if (!rtc_server_storage.is_initialized) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    int idx = rtc_server_storage.active_index;
+    if (idx < 0 || idx >= rtc_server_storage.count) {
+        idx = 0; // Fallback
+    }
+
+    strlcpy(out_url, rtc_server_storage.servers[idx].url, max_len);
+    
     return ret;
 }
