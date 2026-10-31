@@ -4,6 +4,13 @@ static const char *TAG = "API_CLIENT";
 static char s_last_cmd_output[API_C_CMD_OUT_SIZE] = {0};
 static char s_remote_cmd_output[API_C_REMOTE_CMD_OUT_SIZE] = {0};
 
+RTC_DATA_ATTR struct {
+    http_server_config_t servers[MAX_HTTP_SERVERS];
+    int32_t count;          // Number of servers
+    int32_t active_index;   // Index of selected server
+    bool is_initialized;    // Flag to know if servers are already cached in RTC
+} rtc_server_storage;
+
 const char* api_client_get_last_cmd_output(void) {
     
     return s_last_cmd_output;
@@ -164,4 +171,178 @@ esp_err_t api_client_send_audio(char *out_msg, size_t max_len) {
     ESP_LOGI(TAG, "Wi-Fi disconnected and radio powered down.");
 
     return ESP_OK;
+}
+
+/**
+ * @brief Automatically synchronizes HTTP server profiles from headers to NVS.
+ *        It checks if the server count or any URL has changed.
+ *        If a change is detected, it clears old records and updates them.
+ */
+esp_err_t server_sync_config_nvs_automatically(void) {
+    esp_err_t ret = ESP_OK;
+    nvs_handle_t nvs_h;
+
+    // Open the NVS "storage" namespace in read/write mode
+    if (nvs_open("storage", NVS_READWRITE, &nvs_h) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to open NVS 'storage' namespace");
+        return ESP_FAIL;
+    }
+
+    bool needs_update = false;
+    int32_t stored_count = -1;
+
+    // 1. Check if the stored server count matches the current defines count
+    if (nvs_get_i32(nvs_h, "server_count", &stored_count) != ESP_OK || stored_count != INITIAL_SERVER_COUNT) {
+        needs_update = true;
+    } else {
+        // 2. If count matches, verify profile by profile using a temporary struct array
+        struct {
+            const char *url;
+        } current_servers[INITIAL_SERVER_COUNT] = {
+            {INITIAL_SERVER_URL_0},
+            #if INITIAL_SERVER_COUNT > 1
+            {INITIAL_SERVER_URL_1},
+            #endif
+            // Add more profiles here if your defines expand in the future
+        };
+
+        for (int i = 0; i < INITIAL_SERVER_COUNT; i++) {
+            char k_url[16];
+            snprintf(k_url, sizeof(k_url), "server_url_%d", i);
+
+            char stored_url[64] = {0};
+            size_t len_url = sizeof(stored_url);
+
+            // Read currently stored values from NVS
+            esp_err_t err_u = nvs_get_str(nvs_h, k_url, stored_url, &len_url);
+
+            // If reading fails or text doesn't match the defines, an update is required
+            if (err_u != ESP_OK || strcmp(stored_url, current_servers[i].url) != 0) {
+                needs_update = true;
+                break; // Exit early as soon as one difference is found
+            }
+        }
+    }
+
+    // 3. If any change was detected, clean up old keys and rewrite with new defines
+    if (needs_update) {
+        ESP_LOGI(TAG, "Changes detected in Server defines! Synchronizing NVS...");
+
+        // Erase old profiles if they previously existed to prevent leftover data
+        if (stored_count > 0) {
+            for (int i = 0; i < stored_count; i++) {
+                char k_url[16];
+                snprintf(k_url, sizeof(k_url), "server_url_%d", i);
+                esp_err_t err_es = nvs_erase_key(nvs_h, k_url);
+                if (err_es != ESP_OK && err_es != ESP_ERR_NVS_NOT_FOUND) {
+                    ESP_LOGW(TAG, "Warning: failed to erase %s: %s", k_url, esp_err_to_name(err_es));
+                }
+            }
+        }
+
+        // Save the new server count
+        ret = nvs_set_i32(nvs_h, "server_count", INITIAL_SERVER_COUNT);
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to set NVS count using key 'server_count' in 'storage' namespace");
+            nvs_close(nvs_h);
+            return ret;
+        }
+
+        // Populate the structured array with current defines
+        struct {
+            const char *url;
+        } server_list[INITIAL_SERVER_COUNT] = {
+            {INITIAL_SERVER_URL_0},
+            #if INITIAL_SERVER_COUNT > 1
+            {INITIAL_SERVER_URL_1},
+            #endif
+        };
+
+        // Iteratively save all URLs cleanly using a loop
+        for (int i = 0; i < INITIAL_SERVER_COUNT; i++) {
+            char k_url[16];
+            snprintf(k_url, sizeof(k_url), "server_url_%d", i);
+
+            ret = nvs_set_str(nvs_h, k_url, server_list[i].url);
+            if (ret != ESP_OK) {
+                ESP_LOGE(TAG, "Failed to write %s to NVS: %s", k_url, esp_err_to_name(ret));
+                nvs_close(nvs_h);
+                return ret;
+            }
+        }
+
+        // Commit changes permanently to flash storage
+        ret = nvs_commit(nvs_h);
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to commit NVS changes: %s", esp_err_to_name(ret));
+        } else {
+            ESP_LOGI(TAG, "NVS successfully synchronized with new Server configurations!");
+        }
+    } else {
+        ESP_LOGI(TAG, "No changes in Server defines. Using existing NVS data.");
+    }
+
+    nvs_close(nvs_h);
+    return ret;
+}
+
+/**
+ * @brief Caches HTTP server profiles from NVS into RTC RAM during cold boot.
+ *        To be called once during cold boot / system startup.
+ */
+esp_err_t server_rtc_cache_init(void) {
+    esp_err_t ret = ESP_OK;
+    nvs_handle_t nvs_h;
+
+    ret = nvs_open("storage", NVS_READONLY, &nvs_h);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to open NVS 'storage' for reading: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    // Read the total server count stored in NVS
+    int32_t stored_count = 0;
+    ret = nvs_get_i32(nvs_h, "server_count", &stored_count);
+    if (ret != ESP_OK || stored_count <= 0) {
+        ESP_LOGW(TAG, "No valid Server count found in NVS");
+        nvs_close(nvs_h);
+        return (ret != ESP_OK) ? ret : ESP_ERR_NVS_NOT_FOUND;
+    }
+
+    // Prevent overflow if NVS count exceeds our maximum array limit
+    if (stored_count > MAX_HTTP_SERVERS) {
+        stored_count = MAX_HTTP_SERVERS;
+    }
+
+    rtc_server_storage.count = stored_count;
+
+    // Iteratively load all server URLs from NVS into the RTC array
+    for (int i = 0; i < stored_count; i++) {
+        char k_url[16];
+        snprintf(k_url, sizeof(k_url), "server_url_%d", i);
+
+        size_t len_u = sizeof(rtc_server_storage.servers[i].url);
+
+        esp_err_t err_u = nvs_get_str(nvs_h, k_url, rtc_server_storage.servers[i].url, &len_u);
+        if (err_u != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to read %s from NVS: %s", k_url, esp_err_to_name(err_u));
+            nvs_close(nvs_h);
+            return err_u;
+        }
+    }
+
+    nvs_close(nvs_h);
+
+    // Ensure active_index is within safe bounds (default to 0 on first boot)
+    if (rtc_server_storage.active_index < 0 || rtc_server_storage.active_index >= rtc_server_storage.count) {
+        ESP_LOGW(TAG, "Active server index (%ld) out of bounds or uninitialized. Resetting to 0.", (long)rtc_server_storage.active_index);
+        rtc_server_storage.active_index = 0;
+    }
+
+    rtc_server_storage.is_initialized = true;
+
+    ESP_LOGI(TAG, "RTC server cache successfully initialized with %ld profiles. Active index: %ld",
+             (long)rtc_server_storage.count, (long)rtc_server_storage.active_index);
+
+    return ret;
 }

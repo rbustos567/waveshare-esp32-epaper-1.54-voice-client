@@ -11,6 +11,7 @@
 #include "audio_bsp/audio_bsp.h"
 #include "cJSON.h"
 #include <mbedtls/base64.h>
+#include "servers_config.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -27,12 +28,21 @@ extern "C" {
 
 #define API_C_SERVER_TIMEOUT  30000
 
-#define API_C_SERVER_KEY         "API-Key"      
-#define API_C_SERVER_PASS	 "password123x"
+#define API_C_SERVER_KEY          "API-Key"      
+#define API_C_SERVER_PASS         "password123x"
+
+#define MAX_HTTP_SERVERS          3
+#define HTTP_SERVER_URL_MAX_LEN   64
+
+typedef struct {
+    char url[HTTP_SERVER_URL_MAX_LEN];
+} http_server_config_t;
 
 const char* api_client_get_last_cmd_output(void);
 const char* api_client_get_remote_cmd_output(void);
 esp_err_t api_client_send_audio(char *out_msg, size_t max_len);
+esp_err_t server_sync_config_nvs_automatically(void);
+esp_err_t server_rtc_cache_init(void);
 
 #ifdef __cplusplus
 }
