@@ -42,7 +42,7 @@ const char* wifi_label_wrapper(int index);
 int wifi_manager_get_active_index(void);
 int wifi_manager_get_profiles_count(void);
 const char* wifi_manager_get_ssid_at(int index);
-void wifi_manager_set_active_index(int index);
+esp_err_t wifi_manager_set_active_index(int index);
 
 #ifdef __cplusplus
 }

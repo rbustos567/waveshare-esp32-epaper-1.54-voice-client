@@ -101,6 +101,8 @@ esp_err_t api_client_send_audio(char *out_msg, size_t max_len) {
     config.crt_bundle_attach = esp_crt_bundle_attach;
     config.event_handler = http_event_handler;
 
+    ESP_LOGI(TAG, "Configured Server struct with URL: %s", config.url);
+
     esp_http_client_handle_t client = esp_http_client_init(&config);
     if (client == NULL) {
         ESP_LOGE(TAG, "Failed to initialize HTTP client");
@@ -371,5 +373,44 @@ esp_err_t server_get_active_url(char *out_url, size_t max_len) {
 
     strlcpy(out_url, rtc_server_storage.servers[idx].url, max_len);
     
+    return ret;
+}
+
+const char* server_label_wrapper(int index) {
+
+    return server_get_url_at(index);
+}
+
+int server_get_active_index(void) {
+
+    return (int)rtc_server_storage.active_index;
+}
+
+int server_get_profiles_count(void) {
+
+    return (int)rtc_server_storage.count;
+}
+
+const char* server_get_url_at(int index) {
+
+    if (index >= 0 && index < rtc_server_storage.count) {
+        return rtc_server_storage.servers[index].url;
+    }
+
+    return "";
+}
+
+esp_err_t server_set_active_index(int index) {
+    esp_err_t ret = ESP_OK;
+
+    if (index < 0 || index >= rtc_server_storage.count) {
+        ESP_LOGE(TAG, "Invalid server index: %d", index);
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    rtc_server_storage.active_index = index;
+
+    ESP_LOGI(TAG, "Active server profile changed to index %d (%s)", index, rtc_server_storage.servers[index].url);
+
     return ret;
 }

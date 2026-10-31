@@ -33,7 +33,9 @@ void action_record_and_send_audio(void);
 void action_open_audio_command_screen(void);
 void action_cancel_voice_session(void);
 void action_open_choose_network_editor(void);
+void action_open_choose_server_editor(void);
 void action_save_wifi_selection(int index);
+void action_save_server_selection(int index);
 
 #ifdef __cplusplus
 }

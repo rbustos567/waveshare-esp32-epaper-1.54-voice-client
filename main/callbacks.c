@@ -213,6 +213,14 @@ void action_save_wifi_selection(int index) {
 }
 
 /**
+ * @brief Saves the selected server index.
+ */
+void action_save_server_selection(int index) {
+    server_set_active_index(index);
+    ESP_LOGI(TAG, "Server index saved: %d", index);
+}
+
+/**
  * @brief Opens the sleep timeout configuration editor UI.
  */
 void action_open_sleep_timeout_editor(void)
@@ -259,6 +267,32 @@ void action_open_choose_network_editor(void)
     set_current_ui_state(UI_STATE_EDIT_VALUE);
     render_full(NULL, NULL);
 }
+
+/**
+ * @brief Opens the Choose Server configuration editor UI.
+ */
+void action_open_choose_server_editor(void)
+{
+    set_menu_active_editor_title("Choose Server");
+
+    int current_index = server_get_active_index();
+    set_menu_active_editor_current_val(current_index);
+    set_menu_active_editor_min_val(0);
+
+    int max_val = server_get_profiles_count() - 1;
+    if (max_val < 0)
+        max_val = 0; // Fallback
+    set_menu_active_editor_max_val(max_val);
+
+    set_menu_active_editor_step(1);
+    set_menu_active_editor_unit_suffix(""); /* Optional, labels already include units */
+    set_menu_active_editor_get_label(server_label_wrapper);
+    set_menu_active_editor_on_save(action_save_server_selection);
+    set_menu_active_editor_focus_index(EDITOR_FOCUS_PLUS);
+    set_current_ui_state(UI_STATE_EDIT_VALUE);
+    render_full(NULL, NULL);
+}
+
 
 /**
  * @brief Returns the system view back to the splash/running screen.

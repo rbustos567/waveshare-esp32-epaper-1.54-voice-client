@@ -39,6 +39,11 @@ esp_err_t api_client_send_audio(char *out_msg, size_t max_len);
 esp_err_t server_sync_config_nvs_automatically(void);
 esp_err_t server_rtc_cache_init(void);
 esp_err_t server_get_active_url(char *out_url, size_t max_len);
+const char* server_label_wrapper(int index);
+int server_get_active_index(void);
+int server_get_profiles_count(void);
+const char* server_get_url_at(int index);
+esp_err_t server_set_active_index(int index);
 
 #ifdef __cplusplus
 }

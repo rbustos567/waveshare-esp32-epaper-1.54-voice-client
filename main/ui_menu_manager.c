@@ -15,7 +15,7 @@ static Menu sub_menu_connectivity;
 
 static MenuItem connectivity_items[] = {
     {"Choose Network", NULL, action_open_choose_network_editor, false, NULL},
-    {"Choose Server", NULL, NULL, false, NULL},
+    {"Choose Server", NULL, action_open_choose_server_editor, false, NULL},
     {"Exit", NULL, NULL, true, NULL}
 };
 

@@ -560,10 +560,17 @@ const char* wifi_manager_get_ssid_at(int index) {
     return "";
 }
 
-void wifi_manager_set_active_index(int index) {
-    
-    if (index >= 0 && index < rtc_wifi_storage.count) {
-        rtc_wifi_storage.active_index = index;
-        ESP_LOGI(TAG, "Active Wi-Fi profile changed to index %d (%s)", index, rtc_wifi_storage.profiles[index].ssid);
+esp_err_t wifi_manager_set_active_index(int index) {
+    esp_err_t ret = ESP_OK;    
+
+    if (index < 0 || index >= rtc_wifi_storage.count) {
+	ESP_LOGE(TAG, "Invalid wifi index: %d", index);
+        return ESP_ERR_INVALID_ARG;
     }
+    
+    rtc_wifi_storage.active_index = index;
+
+    ESP_LOGI(TAG, "Active Wi-Fi profile changed to index %d (%s)", index, rtc_wifi_storage.profiles[index].ssid);
+
+    return ret;
 }
