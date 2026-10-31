@@ -221,6 +221,14 @@ void action_save_server_selection(int index) {
 }
 
 /**
+ * @brief Saves the selected audio volume index
+ */
+void action_save_audio_vol_selection(int index) {
+    audio_set_and_save_volume(index);
+    ESP_LOGI(TAG, "Audio volume saved: %d", index);
+}
+
+/**
  * @brief Opens the sleep timeout configuration editor UI.
  */
 void action_open_sleep_timeout_editor(void)
@@ -293,7 +301,28 @@ void action_open_choose_server_editor(void)
     render_full(NULL, NULL);
 }
 
+/**
+ * @brief Opens the Set Audio Volume editor UI.
+ */
+void action_open_audio_vol_editor(void) 
+{
+    set_menu_active_editor_title("Set Audio Vol");
 
+    uint8_t curr_vol = INITIAL_AUDIO_VOLUME;
+    audio_get_volume(&curr_vol);
+    set_menu_active_editor_current_val(curr_vol);
+    set_menu_active_editor_min_val(0);
+    set_menu_active_editor_max_val(100);
+
+    set_menu_active_editor_step(10);
+    set_menu_active_editor_unit_suffix("%");
+    set_menu_active_editor_get_label(NULL);
+    set_menu_active_editor_on_save(action_save_audio_vol_selection);
+    set_menu_active_editor_focus_index(EDITOR_FOCUS_PLUS);
+    set_current_ui_state(UI_STATE_EDIT_VALUE);
+    render_full(NULL, NULL);
+
+}
 /**
  * @brief Returns the system view back to the splash/running screen.
  */

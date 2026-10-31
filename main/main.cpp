@@ -97,25 +97,37 @@ extern "C" void app_main(void) {
         /* FIRST COLD BOOT (Power-On / Reset Button / Cable Plugged) */
         /* ======================================================= */
         ESP_LOGI(TAG, "System booted normally (Power-on Reset / Soft Reset).");
+	// Wifi ssid sync
         ret = wifi_sync_credentials_nvs_automatically();
 	if (ret != ESP_OK) {
-            ESP_LOGW(TAG, "Wifi credentials sync failed : %s", esp_err_to_name(ret));
+            ESP_LOGW(TAG, "Wifi credentials NVS sync failed : %s", esp_err_to_name(ret));
         }
 
 	ret = wifi_rtc_cache_init();
 	if (ret != ESP_OK) {
-            ESP_LOGW(TAG, "Wifi RTC caching failed : %s", esp_err_to_name(ret));
+            ESP_LOGW(TAG, "Wifi credentials RTC caching failed : %s", esp_err_to_name(ret));
         }
-
+        // Servers sync
         ret = server_sync_config_nvs_automatically();
         if (ret != ESP_OK) {
-            ESP_LOGW(TAG, "Servers sync failed : %s", esp_err_to_name(ret));
+            ESP_LOGW(TAG, "Servers NVS sync failed : %s", esp_err_to_name(ret));
         }
 
 	ret = server_rtc_cache_init();
 	if (ret != ESP_OK) {
             ESP_LOGW(TAG, "Servers RTC caching failed : %s", esp_err_to_name(ret));
         }
+
+	// Audio volume sync
+        ret = audio_sync_volume_nvs_automatically();
+	if (ret != ESP_OK) {
+            ESP_LOGW(TAG, "Audio NVS sync failed : %s", esp_err_to_name(ret));
+	}
+
+	ret = audio_rtc_cache_init();
+        if (ret != ESP_OK) {
+            ESP_LOGW(TAG, "Audio RTC caching failed : %s", esp_err_to_name(ret));
+	}
 
     } else if (wakeup_reason == ESP_SLEEP_WAKEUP_EXT0) {
 	/* ======================================================= */

@@ -11,7 +11,13 @@ static Menu main_menu;
 static Menu sub_menu_config;
 static Menu sub_menu_power_mgmt;
 static Menu sub_menu_time_set;
+static Menu sub_menu_audio_set;
 static Menu sub_menu_connectivity;
+
+static MenuItem audio_items[] = {
+    {"Set Audio Vol", NULL, action_open_audio_vol_editor, false, NULL},
+    {"Exit", NULL, NULL, true, NULL}
+};
 
 static MenuItem connectivity_items[] = {
     {"Choose Network", NULL, action_open_choose_network_editor, false, NULL},
@@ -32,6 +38,7 @@ static MenuItem power_mgmt_items[] = {
 static MenuItem config_items[] = {
     {"Power Management", &sub_menu_power_mgmt, NULL, false, NULL},
     {"Time Settings", &sub_menu_time_set, NULL, false, NULL},
+    {"Audio Settings", &sub_menu_audio_set, NULL, false, NULL},
     {"Connectivity", &sub_menu_connectivity, NULL, false, NULL},
     {"Exit", NULL, NULL, true, NULL}
 };
@@ -113,6 +120,11 @@ esp_err_t reset_to_root_menu(void) {
 
 esp_err_t init_menu(void) {
     esp_err_t ret = ESP_OK;
+
+    sub_menu_audio_set.title = "Audio Settings";
+    sub_menu_audio_set.items = audio_items;
+    sub_menu_audio_set.num_items = sizeof(audio_items) / sizeof(MenuItem);
+    sub_menu_audio_set.selected_index = 0;
 
     sub_menu_connectivity.title = "Connectivity";
     sub_menu_connectivity.items = connectivity_items;
