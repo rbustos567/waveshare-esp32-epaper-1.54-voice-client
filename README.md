@@ -42,9 +42,12 @@ Before compiling, you need to configure your network credentials and server endp
 #define INITIAL_WIFI_SSID_1 "YourMobile"
 #define INITIAL_WIFI_PASS_2 "YourMobilePass"
 ```
-2. Open main/api_client.h and configure your backend server IP address and endpoint:
+2. Open main/servers_config.h and configure your backend server IP address. By default, you can provide two IP addresses. If you only provide one, do not forget to set INITIAL_SERVER_COUNT to 1. The first will be the default one.
 ```bash
-#define API_C_SERVER_URL      "http://<YOUR SERVER IP ADDRESS>:8000/process-audio"
+#define INITIAL_SERVER_COUNT      2
+
+#define INITIAL_SERVER_URL_0      "https://server0"
+#define INITIAL_SERVER_URL_1      "https://server1"
 ```
 3. Run the project configuration tool to adjust any other system parameters if needed:
 ```bash
