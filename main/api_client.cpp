@@ -90,7 +90,10 @@ esp_err_t api_client_send_audio(char *out_msg, size_t max_len) {
     ret = server_get_active_url(server_url, sizeof(server_url));
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to retrieve active server URL!");
-        // Handle error accordingly (e.g., return or fallback)
+        if (out_msg)
+            snprintf(out_msg, max_len, "Failed to retrieve active server URL.");
+        wifi_disconnect();
+	// Handle error accordingly (e.g., return or fallback)
         return ret;
     }
 
@@ -107,7 +110,7 @@ esp_err_t api_client_send_audio(char *out_msg, size_t max_len) {
     if (client == NULL) {
         ESP_LOGE(TAG, "Failed to initialize HTTP client");
         if (out_msg) 
-	    snprintf(out_msg, max_len, "HTTP Init Error");
+	    snprintf(out_msg, max_len, "Failed to initialize HTTP client");
         wifi_disconnect();
         
 	return ESP_FAIL;
@@ -121,15 +124,15 @@ esp_err_t api_client_send_audio(char *out_msg, size_t max_len) {
     esp_http_client_set_header(client, API_C_SERVER_KEY, API_C_SERVER_PASS);
     esp_http_client_set_header(client, "X-Communication-Status", "active");
 
-    esp_err_t err = esp_http_client_open(client, audio_size);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to open connection: %s", esp_err_to_name(err));
+    ret = esp_http_client_open(client, audio_size);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to open connection: %s", esp_err_to_name(ret));
         if (out_msg)
-	    snprintf(out_msg, max_len, "Connection Error");
+	    snprintf(out_msg, max_len, "Failed to open connection");
         esp_http_client_cleanup(client);
         wifi_disconnect();
 
-        return err;
+        return ret;
     }
 
     /* Send audio buffer via POST */
@@ -144,18 +147,11 @@ esp_err_t api_client_send_audio(char *out_msg, size_t max_len) {
     
     if (status_code == 200) {
 
-	/* Since event_handler already captured the header on the fly, 
-           we only evaluate the contents of our static variable: */
-        if (strlen(s_remote_cmd_output) > 0) {
-            ESP_LOGI("SERVER_HEADER", "Cmd Output captured: %s", s_remote_cmd_output);
-            if (out_msg)
-                snprintf(out_msg, max_len, "%s", s_remote_cmd_output);
-            
-        } else {
+	// If nothing was responded from server
+	if (s_remote_cmd_output[0] == '\0') {
             ESP_LOGW("SERVER_HEADER", "X-Cmd-Output not received, using default message.");
             if (out_msg)
-                snprintf(out_msg, max_len, "Command executed successfully.");
-            
+                snprintf(out_msg, max_len, "No output response from Server!");
         }
 
         /* Read raw WAV audio binary response and play it */
@@ -173,7 +169,7 @@ esp_err_t api_client_send_audio(char *out_msg, size_t max_len) {
     } else {
         ESP_LOGE("SEND_HTTP", "HTTP Error: %d", status_code);
         if (out_msg)
-            snprintf(out_msg, max_len, "Server Error: HTTP %d", status_code);
+            snprintf(out_msg, max_len, "HTTP Error: %d", status_code);
     }
 
     esp_http_client_close(client);
@@ -182,7 +178,7 @@ esp_err_t api_client_send_audio(char *out_msg, size_t max_len) {
     wifi_disconnect();
     ESP_LOGI(TAG, "Wi-Fi disconnected and radio powered down.");
 
-    return ESP_OK;
+    return ret;
 }
 
 /**

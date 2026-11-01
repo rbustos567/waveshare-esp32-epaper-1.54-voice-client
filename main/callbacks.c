@@ -64,12 +64,13 @@ static void voice_session_task(void *pvParameters) {
         esp_err_t err = api_client_send_audio(server_response_buf, sizeof(server_response_buf));
         if (err != ESP_OK) {
             ESP_LOGE(TAG, "Failed to send audio via HTTP: %s", esp_err_to_name(err));
-            snprintf(server_response_buf, sizeof(server_response_buf), "Network Error");
         }
 
         const char *server_response = api_client_get_remote_cmd_output();
 
-        if (server_response != NULL && strlen(server_response) > 0) {
+	if (server_response_buf[0] != '\0') {
+            render_partial_with_text("Ready to record", server_response_buf);
+	} else if (server_response != NULL && strlen(server_response) > 0) {
             render_partial_with_text("Ready to record", server_response);
         } else {
             render_partial_with_text("Ready to record", "Done.");
