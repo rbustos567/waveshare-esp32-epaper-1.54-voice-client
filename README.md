@@ -106,6 +106,8 @@ idf.py -p /dev/ttyUSB0 monitor
 ## Device Usage & Navigation
 
 The device uses the physical BOOT button (located next to the micro SD card slot) as the primary input control, utilizing a combination of single and double clicks managed by a debounced FreeRTOS task.
+- **Refresh Splash Screen:**
+  - Single-click to refresh screen to see updated information such as: battery remaining, date, current time, system uptime. 
 - **Splash Screen to Main Menu:**
   - Double-click the BOOT button from the initial informational splash screen to enter the main menu.
 - **Menu Navigation:**
