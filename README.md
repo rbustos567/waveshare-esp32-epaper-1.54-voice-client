@@ -44,12 +44,23 @@ Before compiling, you need to configure your network credentials and server endp
 #define INITIAL_WIFI_SSID_1 "YourMobile"
 #define INITIAL_WIFI_PASS_2 "YourMobilePass"
 ```
-2. Open main/servers_config.h and configure your backend server URL, by replacing "https://server0" with your server URL. By default, you can provide two server URLs. If you only provide one, do not forget to set INITIAL_SERVER_COUNT to 1. The first will be the default one.
-```bash
-#define INITIAL_SERVER_COUNT      2
+2. Open `main/servers_config.h` and configure your backend server URL.
 
-#define INITIAL_SERVER_URL_0      "https://server0"
-#define INITIAL_SERVER_URL_1      "https://server1"
+   **How to find your server's IP address:**
+   Run one of the following commands in the terminal of the machine where your backend server is running:
+   - Linux / Raspberry Pi / Orange Pi: `hostname -I` or `ip a`
+   - Windows: `ipconfig` (look for the **IPv4 Address**)
+   - macOS: `ipconfig getifaddr en0`
+
+  **Configuration:**
+   Replace `"https://server0"` with your server's local IP and the container port (default is `8000`). Make sure to use `http://` unless you have configured SSL/HTTPS on your server.
+
+   If you only provide one server, set `INITIAL_SERVER_COUNT` to `1`:
+   ```c
+   #define INITIAL_SERVER_COUNT      1
+
+   #define INITIAL_SERVER_URL_0      "[http://192.168.1.50:8000](http://192.168.1.50:8000)"
+   #define INITIAL_SERVER_URL_1      "https://server1" // Ignored if count is set to 1
 ```
 3. Run the project configuration tool to adjust any other system parameters if needed:
 ```bash
