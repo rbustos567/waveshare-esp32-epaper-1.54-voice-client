@@ -21,7 +21,7 @@ extern "C" {
 #define API_C_REMOTE_CMD_OUT_SIZE    256
 #define MAX_AUDIO_BUF_SIZE  (30 * 16000 * 2) // Buffer size for aprox. 30 sec of recording
 
-#define API_C_SERVER_TIMEOUT  30000
+#define API_C_SERVER_TIMEOUT  120000
 
 #define API_C_SERVER_KEY          "API-Key"      
 #define API_C_SERVER_PASS         "password123x"
