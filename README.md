@@ -53,13 +53,14 @@ Before compiling, you need to configure your network credentials and server endp
    - macOS: `ipconfig getifaddr en0`
 
   **Configuration:**
-   Replace `"https://server0"` with your server's local IP and the container port (default is `8000`). Make sure to use `http://` unless you have configured SSL/HTTPS on your server.
+   Replace `"https://server0"` with your server's local IP and the container port (default is `8000`). Make sure to use `http://` unless you have configured SSL/HTTPS on your server. And remember to add at the end of the server url /process-audio. You may also have more than one server configured. See example below.
 
    If you only provide one server, set `INITIAL_SERVER_COUNT` to `1`:
-   ```c
+   ```
+   // Example:
    #define INITIAL_SERVER_COUNT      1
-
-   #define INITIAL_SERVER_URL_0      "[http://192.168.1.50:8000](http://192.168.1.50:8000)"
+   
+   #define INITIAL_SERVER_URL_0      "http://192.168.1.50:8000/process-audio"
    #define INITIAL_SERVER_URL_1      "https://server1" // Ignored if count is set to 1
 ```
 3. Run the project configuration tool to adjust any other system parameters if needed:
