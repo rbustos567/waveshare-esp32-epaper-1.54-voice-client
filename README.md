@@ -53,7 +53,7 @@ Before compiling, you need to configure your network credentials and server endp
    - macOS: `ipconfig getifaddr en0`
 
   **Configuration:**
-   Replace `"https://server0"` with your server's local IP and the container port (default is `8000`). Make sure to use `http://` unless you have configured SSL/HTTPS on your server. And remember to add at the end of the server url /process-audio. You may also have more than one server configured. See example below.
+   Replace `"https://server0"` with your server's local IP and the container port (default is `8000`). Make sure to use `http://` unless you have configured SSL/HTTPS on your server. And remember to add at the end of the server url /process-audio. It is possible to have more than one server configured. See example below.
 
    If you only provide one server, set `INITIAL_SERVER_COUNT` to `1`:
    ```
