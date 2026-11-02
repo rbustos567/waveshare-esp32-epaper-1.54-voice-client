@@ -44,7 +44,7 @@ Before compiling, you need to configure your network credentials and server endp
 #define INITIAL_WIFI_SSID_1 "YourMobile"
 #define INITIAL_WIFI_PASS_2 "YourMobilePass"
 ```
-2. Open `main/servers_config.h` and configure your backend server URL.
+2. Set the Server(s). To do this, open `main/servers_config.h` and configure your backend server URL.
 
    **How to find your server's IP address:**
    Run one of the following commands in the terminal of the machine where your backend server is running:
