@@ -1,6 +1,8 @@
 # ESP32-S3 e-Paper 1.54 Voice Commander Client
 
-Firmware for the Waveshare ESP32-S3 e-Paper 1.54" development board, designed for low-power operation, robust FreeRTOS task management, NVS persistence, NTP synchronization, and secure HTTP audio streaming to a remote server backend.
+Firmware for the Waveshare ESP32-S3 e-Paper 1.54" development board, designed for low-power operation, robust FreeRTOS task management, NVS persistence, NTP synchronization, and secure HTTP audio streaming. This client captures voice input, manages local device state, and communicates directly over HTTP with a remote AI backend server to execute system commands and receive real-time feedback on the e-Paper display.
+
+The backend server project responsible for processing the audio and executing commands can be found at: https://github.com/rbustos567/http-server-for-waveshare-esp32-epaper-1.54-voice.git
 
 <img width="4096" height="3072" alt="IMG20261024164440" src="https://github.com/user-attachments/assets/d87208ca-fac7-4133-b2b1-085c01697363" />
 
