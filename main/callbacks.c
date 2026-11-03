@@ -22,6 +22,9 @@ static void voice_session_task(void *pvParameters) {
 
     ESP_LOGI(TAG, "Starting voice session task...");
 
+    /* Pause inactivity timer during audio capture and HTTP transaction */
+    power_manager_pause_inactivity();
+
     set_cancel_voice_session(false);
 
     /* 1. STATE: Recording audio */
@@ -45,6 +48,10 @@ static void voice_session_task(void *pvParameters) {
             audio_manager_toggle_recording();
         }
 
+	/* Resume and reset inactivity countdown once the transaction completes */
+        power_manager_resume_inactivity();
+        power_manager_reset_inactivity();
+
         vTaskDelete(NULL);
         return;
     }
@@ -64,6 +71,7 @@ static void voice_session_task(void *pvParameters) {
         esp_err_t err = api_client_send_audio(server_response_buf, sizeof(server_response_buf));
         if (err != ESP_OK) {
             ESP_LOGE(TAG, "Failed to send audio via HTTP: %s", esp_err_to_name(err));
+	    render_partial_with_text("Error", "Failed to send audio via HTTP");
         }
 
         const char *server_response = api_client_get_remote_cmd_output();
@@ -81,8 +89,15 @@ static void voice_session_task(void *pvParameters) {
 
     } else {
         ESP_LOGW(TAG, "No audio recorded.");
+	render_partial_with_text("Cancelled", "No audio recorded");
         set_is_waiting_response(false);
     }
+
+    /* ========================================================= */
+    /* CLEANUP: Always resume timer, reset countdown, and delete task */
+    /* ========================================================= */
+    power_manager_resume_inactivity();
+    power_manager_reset_inactivity();
 
     vTaskDelete(NULL);
 }

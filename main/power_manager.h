@@ -35,6 +35,8 @@ const sleep_timeout_option_t* power_manager_get_timeout_option_at(size_t index);
 int power_manager_get_current_timeout_index(void);
 esp_err_t power_manager_set_timeout_index(int index);
 const char* get_timeout_label_wrapper(int index);
+esp_err_t power_manager_pause_inactivity(void);
+esp_err_t power_manager_resume_inactivity(void);
 
 #ifdef __cplusplus
 }

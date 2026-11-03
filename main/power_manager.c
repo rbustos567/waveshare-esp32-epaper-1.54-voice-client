@@ -3,6 +3,7 @@
 static const char *TAG = "POWER_MANAGER";
 static TimerHandle_t s_inactivity_timer = NULL;
 static SemaphoreHandle_t s_sleep_semaphore = NULL;
+static bool s_inactivity_paused = false;
 
 static const sleep_timeout_option_t TIMEOUT_OPTIONS[] = {
     {"30 sec", 30},
@@ -68,10 +69,16 @@ esp_err_t enter_deep_sleep_boot_button(void)
  * @brief Callback of timer (Executes in Tmr Svc).
  * MUST BE VERY LIGHT to avoid overflow of stack
  */
-static void inactivity_timeout_cb(TimerHandle_t xTimer)
-{
+static void inactivity_timeout_cb(TimerHandle_t xTimer) {
+    // If the system is busy (paused), do not allow deep sleep
+    if (s_inactivity_paused) {
+        // Reset the timer to push the timeout forward while busy
+        xTimerReset(xTimer, 0);
+        return;
+    }
+
     if (s_sleep_semaphore != NULL) {
-	// Gives the semaphore to unblock the dedicated task
+        // Gives the semaphore to unblock the dedicated task
         xSemaphoreGive(s_sleep_semaphore);
     }
 }
@@ -269,4 +276,35 @@ const char* get_timeout_label_wrapper(int index) {
     const sleep_timeout_option_t *opt = power_manager_get_timeout_option_at(index);
     
     return opt ? opt->label : "";
+}
+
+/**
+ * @brief Pause the inactivity timer (pauses the countdown).
+ * @return esp_err_t ESP_OK on success, ESP_FAIL otherwise.
+ */
+esp_err_t power_manager_pause_inactivity(void) {
+    esp_err_t ret = ESP_OK;
+
+    s_inactivity_paused = true;
+    ESP_LOGI(TAG, "Inactivity timer paused (flag enabled).");
+
+    return ret;
+}
+
+/**
+ * @brief Resume or restart the inactivity timer after server communication.
+ * @return esp_err_t ESP_OK on success, ESP_FAIL otherwise.
+ */
+esp_err_t power_manager_resume_inactivity(void) {
+    esp_err_t ret = ESP_OK;
+
+    s_inactivity_paused = false;
+    if (s_inactivity_timer != NULL) {
+        // Reset the timer to start counting fresh from this moment
+        xTimerReset(s_inactivity_timer, 0);
+    }
+
+    ESP_LOGI(TAG, "Inactivity timer resumed and reset (flag disabled).");
+
+    return ret;
 }
