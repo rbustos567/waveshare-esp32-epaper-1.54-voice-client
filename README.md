@@ -13,7 +13,7 @@ The backend server project responsible for processing the audio and executing co
 - **E-Paper Display (EPD) UI:** Multi-state UI manager supporting a Splash Screen, hierarchical menus, configuration editors (Timezone & Sleep Timeout), and real-time partial/full rendering.
 - **Button Event Processing:** Dedicated FreeRTOS task with hardware debouncing (GPIO0) supporting single-click navigation and double-click actions.
 - **Voice Recording & HTTP Streaming:** Captures raw audio via I2S, streams binary payloads via HTTPS/HTTP POST to a backend service, and plays back server responses.
-- **Network & Time Management:** Automatic Wi-Fi connection handling and SNTP time synchronization with robust callback flags to prevent race conditions.
+- **Network & Time Management:** Automatic Wi-Fi connection handling and SNTP time synchronization with robust callback flags to prevent race conditions
 
 ## Hardware Requirements
 
